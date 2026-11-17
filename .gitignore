@@ -62,3 +62,5 @@ forks.md
 # Library templates copied in by setup or create_agent are install state.
 /templates/*
 !/templates/README.md
+# comic-archive's own agent template is source, not install state.
+!/templates/comic-catalog/
