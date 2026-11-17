@@ -29,8 +29,8 @@ The template is stamped into a group with `ncl groups create --template comic-ca
 
 | Gap | Impact | Plan |
 | --- | --- | --- |
-| Images only reach the model if the agent chooses to `Read` them | Vision depends on instruction-following | Instruction in template (done). Patch agent-runner to send image blocks only if live testing shows it is unreliable |
-| `@chat-adapter/slack` download with bot token unverified | Saved file could be an HTML login page | Verify in Phase 1 live test |
+| Images only reach the model if the agent chooses to `Read` them | Vision depends on instruction-following | Instruction in template (done). Phase 1 live test: agent read the image and described the cover accurately. Patch agent-runner to send image blocks only if it proves unreliable |
+| `@chat-adapter/slack` download with bot token | Saved file could be an HTML login page | Verified in Phase 1 live test: the saved inbox file is the real PNG |
 | No size or MIME cap on inbound attachments (core) | Large uploads go base64 through memory and the DB | Document; validate in comic tools (Phase 2); consider upstream issue |
 | No per-group tool restriction; all agents run `bypassPermissions` with Bash | Agent instructions cannot be the write-authorization boundary | Enforce in MCP tool code and gateway grants (Phase 4) |
 | Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Configure read-only hosts / grants when tools land |
