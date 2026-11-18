@@ -14,7 +14,7 @@ Everything comic-specific rides NanoClaw's supported extension points. No core p
 | Slack intake and threaded replies | `/add-slack` channel skill (Chat SDK, upstream `channels` branch) | installed into `src/channels/` by the skill |
 | Images reaching the agent | Host downloads attachments to the session inbox; agent opens them with `Read` | `src/channels/chat-sdk-bridge.ts`, `src/session-manager.ts`, `container/agent-runner/src/formatter.ts` |
 | Credentials (model, later Metron/Airtable) | OneCLI credential gateway, per-host secrets granted per agent | `/add-onecli` |
-| Comic tools (Phase 2+) | stdio MCP server shipped inside the template (`mcp.json`), mounted read-only at `/workspace/agent/plugins/comic-catalog` | `templates/comic-catalog/` |
+| Comic tools (built, Phase 2) | stdio MCP server `comic-catalog` shipped inside the template (`mcp.json`), mounted read-only at `/workspace/agent/plugins/comic-catalog`; tools `identify_comic` and `get_comic` | `templates/comic-catalog/` |
 
 The template is stamped into a group with `ncl groups create --template comic-catalog`. `/templates/*` is gitignored upstream; `.gitignore` re-includes `templates/comic-catalog/` because it is source, not install state.
 
@@ -36,3 +36,14 @@ The template is stamped into a group with `ncl groups create --template comic-ca
 | Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Metron: no prompt on a granted secret (verified). Recheck for Airtable writes |
 | Metron credential via OneCLI | Resolved | API token as a generic secret (`metron`, host `metron.cloud`, path `/api/*`, `Authorization: Bearer {value}`), granted to ComicCatalog only. Verified with `onecli run --agent <ComicCatalog identifier> -- curl …` |
 | Pre-2000s UPCs identify the series, not the issue (issue is in the add-on digits) | `upc_starts_with` returns many issues, and Metron lacks UPCs for some | Use UPC to narrow the series, then `series_name` + `number` (+ `cover_year`); never accept a UPC hit alone |
+
+## Metron lookup
+
+Findings that shape `identify_comic`:
+
+- Modern barcodes are stored as 17 digits: the 12-digit main code with its check digit, plus a 5-digit add-on.
+- Older Marvel barcodes are stored as an 11-digit body plus a 2-digit add-on (the cover month), with no check digit.
+- `upc_starts_with` takes 11 digits.
+- Some issues (for example 13806) have no barcode in Metron, so a barcode miss is not a no-match.
+- Trades: there is no ISBN search. A multi-type `series_type_id` returns 400, so the lookup runs a TPB search, then one unfiltered title search keeping Hardcover and Omnibus.
+- A 60 s total wait budget applies per lookup; beyond it the tool returns `lookup_failed`.

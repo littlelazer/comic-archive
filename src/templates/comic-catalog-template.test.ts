@@ -40,4 +40,19 @@ describe('comic-catalog template', () => {
   it('forbids record writes in this phase', () => {
     expect(tpl.instructions).toMatch(/do not create, update, or delete/i);
   });
+
+  it('tells the agent to call identify_comic after reading the cover', () => {
+    expect(tpl.instructions).toMatch(/identify_comic/);
+  });
+
+  it('tells the agent to ask for one specific photo from missing hints', () => {
+    expect(tpl.instructions).toMatch(/barcode/i);
+    expect(tpl.instructions).toMatch(/indicia/i);
+    expect(tpl.instructions).toMatch(/ISBN/);
+  });
+
+  it('offers an in-thread retry only for retryable failures', () => {
+    expect(tpl.instructions).toMatch(/retry/i);
+    expect(tpl.instructions).toMatch(/retryable/);
+  });
 });

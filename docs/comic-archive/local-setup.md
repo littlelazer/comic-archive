@@ -6,7 +6,8 @@ Boot path for development. Production (Linux Mac mini) is a later phase.
 
 - macOS with Homebrew and Docker Desktop running.
 - Node at or above the minimum in `setup/lib/node-version.sh` (22.23.4 on the 22 line). Setup installs `node@22` with Homebrew if the Node on `PATH` is older. If you manage Node with nvm, `nvm install 22` before setup works too.
-- pnpm comes from corepack (pinned in `package.json` `packageManager`). Bun is only needed to run the container test suite.
+- pnpm comes from corepack (pinned in `package.json` `packageManager`). Bun is only needed to run the container test suite and the comic-catalog server tests.
+- Bun 1.4.4 at `~/.bun/bin/bun` (the comic-catalog server tests use it).
 
 ## 1. Install NanoClaw
 
@@ -44,4 +45,13 @@ If something fails, check `logs/nanoclaw.error.log`, then `logs/nanoclaw.log`, t
 ```bash
 pnpm exec vitest run src/templates/comic-catalog-template.test.ts
 pnpm test
+~/.bun/bin/bun test ./templates/comic-catalog/server
 ```
+
+Live tests (`*.live.test.ts`) call real Metron and must run through the gateway as ComicCatalog:
+
+```bash
+~/.local/bin/onecli run --agent ag-178c5abd-15a6-4159-87be-1a81fc01103c -- ~/.bun/bin/bun test ./templates/comic-catalog/server --test-name-pattern live
+```
+
+The Phase 2 Slack acceptance posts are in [phase-2-checklist.md](phase-2-checklist.md).
