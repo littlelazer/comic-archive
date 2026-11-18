@@ -169,3 +169,38 @@ describe('judging with the leader detail', () => {
     expect(judgeWithDetail(clues, match, leader).verdict).toBe('confirmed');
   });
 });
+
+describe('cascade from a barcode prefix to the title search', () => {
+  // The stand-in only shapes search pages by query; issue detail answers 404, so the leader is judged as found.
+  function cascade(pages: { prefix: MetronIssueSummary[]; title: MetronIssueSummary[] }) {
+    const urls: string[] = [];
+    const page = (results: MetronIssueSummary[]) =>
+      new Response(JSON.stringify({ count: results.length, next: null, results }));
+    const { client } = clientFor((req) => {
+      const url = new URL(req.url);
+      urls.push(url.search);
+      if (url.searchParams.has('upc_starts_with')) return page(pages.prefix);
+      if (url.searchParams.has('series_name')) return page(pages.title);
+      return new Response('', { status: 404 });
+    });
+    return { client, urls };
+  }
+
+  const READ = { series_title: 'The Thing', issue_number: '1', cover_year: 1983, upc_main: '071486029663' };
+
+  test('a prefix hit in another series falls through to the title search, whose result wins', async () => {
+    const { client, urls } = cascade({ prefix: [summary(500, 'Rom')], title: [summary(13806, 'The Thing')] });
+    const result = await identifyComic(READ, client);
+    expect(urls.some((search) => search.includes('series_name='))).toBe(true);
+    expect(result.verdict).toBe('confirmed');
+    expect(result.candidates.map((c) => c.metronId)).toEqual([13806]);
+  });
+
+  test('prefix hits are kept when the title search finds nothing, and cannot confirm', async () => {
+    const { client } = cascade({ prefix: [summary(13806, 'The Thing')], title: [] });
+    const result = await identifyComic({ ...READ, series_title: 'The Thinq' }, client);
+    expect(result.verdict).not.toBe('no_match');
+    expect(result.verdict).not.toBe('confirmed');
+    expect(result.candidates[0].metronId).toBe(13806);
+  });
+});

@@ -119,10 +119,13 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
     if (page.results.length > 0) return found(page, 'upc_exact');
   }
 
+  let prefixPage: MetronPage<MetronIssueSummary> | undefined;
   if (clues.upcMain) {
     const prefix = { upc_starts_with: clues.upcMain.slice(0, UPC_BODY_LENGTH) };
-    const page = await searchIssues(client, { ...prefix, ...number });
-    if (page.results.length > 0 && prefixHitStands(clues, page.results)) return found(page, 'upc_prefix');
+    prefixPage = await searchIssues(client, { ...prefix, ...number });
+    if (prefixPage.results.length > 0 && prefixHitStands(clues, prefixPage.results)) {
+      return found(prefixPage, 'upc_prefix');
+    }
 
     // Metron lacks barcodes for some issues, so the barcode's other issues name the series to look in.
     // Skipped when a title can be searched instead or an exact lookup was made, to stay within 4 requests.
@@ -139,6 +142,9 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
   if (!clues.seriesTitle) return undefined;
   const title = clues.seriesTitle;
   const page = await searchIssues(client, { series_name: searchTitle(title), ...number, ...year });
+  // A title that finds nothing may be misread, so barcode hits rejected for disagreeing with it are kept;
+  // upc_prefix cannot confirm without series, number and year agreeing, so this is at best probable.
+  if (page.results.length === 0 && prefixPage && prefixPage.results.length > 0) return found(prefixPage, 'upc_prefix');
   return found(
     page,
     'series_number',
