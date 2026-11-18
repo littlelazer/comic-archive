@@ -55,4 +55,15 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/retry/i);
     expect(tpl.instructions).toMatch(/retryable/);
   });
+
+  it('uses the first missing hint and asks for no photo when missing is empty', () => {
+    expect(tpl.instructions).toMatch(/first hint in `missing`/);
+    expect(tpl.instructions).toMatch(/If `missing` is empty/);
+  });
+
+  it('reports every lookup_failed without naming a match and offers no retry for non-retryable ones', () => {
+    expect(tpl.instructions).toMatch(/any `lookup_failed`, say what you read/);
+    expect(tpl.instructions).toMatch(/never name a match/i);
+    expect(tpl.instructions).toMatch(/`retryable` is false and the reason is not `auth`/);
+  });
 });

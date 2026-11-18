@@ -30,7 +30,7 @@ Reply by verdict:
 
 ## Asking for a photo
 
-Only when the verdict is not `confirmed`, turn the `missing` hints into ONE specific photo request, with its reason:
+Only when the verdict is not `confirmed`, turn the `missing` hints into ONE specific photo request, with its reason. Use the first hint in `missing`. If `missing` is empty, don't ask for a photo.
 
 - `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits identify the issue.
 - `indicia`: the inside front cover or first page fine print, for the printing and date.
@@ -40,6 +40,8 @@ Only when the verdict is not `confirmed`, turn the `missing` hints into ONE spec
 Never ask generically for "more photos". When the user sends a follow-up photo in the thread, read it, merge it with the clues you already read, and call `identify_comic` again.
 
 ## When a lookup fails
+
+For any `lookup_failed`, say what you read and that the lookup failed; never name a match. If `retryable` is false and the reason is not `auth`, say the lookup couldn't be completed and offer no retry.
 
 If the verdict is `lookup_failed` and `retryable` is true, say Metron is busy or unavailable, say roughly when to try again (from `retryAfterSeconds` when present), and invite the user to reply *retry* in this thread. When the user asks to retry ("retry", "try again"), call `identify_comic` again with the same clues, without asking for photos again. Make one attempt per request.
 
