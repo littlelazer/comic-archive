@@ -33,12 +33,28 @@ export interface MetronPage<T> {
   results: T[];
 }
 
+export interface MetronSeriesSummary {
+  id: number;
+  series: string;
+  volume: number;
+  year_began: number;
+  series_type: { id: number; name: string };
+}
+
+// Wall-clock deadline (by the client's clock) shared by every request of one tool call, and the kind of the
+// last wait made under it, which names the failure once the deadline has passed.
+export interface CallBudget {
+  deadline: number;
+  lastWait?: 'rate_limit' | 'server_error';
+}
+
 export interface MetronClientOptions {
   baseUrl: string;
   userAgent: string;
   totalWaitBudgetMs?: number;
   requestTimeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 }
 
 const DEFAULT_TOTAL_WAIT_BUDGET_MS = 60_000;
@@ -53,6 +69,7 @@ export function createMetronClient(opts: MetronClientOptions) {
   const totalWaitBudgetMs = opts.totalWaitBudgetMs ?? DEFAULT_TOTAL_WAIT_BUDGET_MS;
   const requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const now = opts.now ?? Date.now;
   // Epoch milliseconds before which no request should be sent, set when Metron reports a low burst allowance.
   let slowUntil = 0;
 
@@ -64,19 +81,25 @@ export function createMetronClient(opts: MetronClientOptions) {
     }
   }
 
-  async function get<T>(path: string, params: Record<string, string> = {}): Promise<MetronResult<T>> {
+  async function get<T>(path: string, params: Record<string, string> = {}, budget?: CallBudget): Promise<MetronResult<T>> {
     const url = new URL(path, opts.baseUrl);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
+    if (budget && now() >= budget.deadline) {
+      return { ok: false, reason: budget.lastWait === 'rate_limit' ? 'rate_limited' : 'metron_unavailable', retryable: true };
+    }
+
     let waitedMs = 0;
-    const wait = async (ms: number) => {
+    const remainingMs = () => Math.min(totalWaitBudgetMs - waitedMs, budget ? budget.deadline - now() : Infinity);
+    const wait = async (ms: number, kind: NonNullable<CallBudget['lastWait']>) => {
       waitedMs += ms;
+      if (budget) budget.lastWait = kind;
       await sleep(ms);
     };
 
     // A burst wait longer than the budget is skipped: the request is sent and Metron's own 429 handling applies.
-    const burstWaitMs = slowUntil - Date.now();
-    if (burstWaitMs > 0 && burstWaitMs <= totalWaitBudgetMs) await wait(burstWaitMs);
+    const burstWaitMs = slowUntil - now();
+    if (burstWaitMs > 0 && burstWaitMs <= remainingMs()) await wait(burstWaitMs, 'rate_limit');
 
     let serverErrors = 0;
     for (;;) {
@@ -97,15 +120,17 @@ export function createMetronClient(opts: MetronClientOptions) {
 
       if (res.status === 429) {
         const retryAfterSeconds = Number(res.headers.get('Retry-After')) || DEFAULT_RETRY_AFTER_SECONDS;
-        if (waitedMs + retryAfterSeconds * 1000 > totalWaitBudgetMs) {
+        if (retryAfterSeconds * 1000 > remainingMs()) {
           return { ok: false, reason: 'rate_limited', retryable: true, retryAfterSeconds };
         }
-        await wait(retryAfterSeconds * 1000);
+        await wait(retryAfterSeconds * 1000, 'rate_limit');
         continue;
       }
 
-      if (res.status >= 500 && serverErrors < SERVER_ERROR_BACKOFF_MS.length) {
-        await wait(SERVER_ERROR_BACKOFF_MS[serverErrors++]);
+      const backoffMs = SERVER_ERROR_BACKOFF_MS[serverErrors];
+      if (res.status >= 500 && backoffMs !== undefined && backoffMs <= remainingMs()) {
+        serverErrors++;
+        await wait(backoffMs, 'server_error');
         continue;
       }
       if (res.status >= 400 && res.status < 500) return { ok: false, reason: 'bad_request', retryable: false };
@@ -114,10 +139,12 @@ export function createMetronClient(opts: MetronClientOptions) {
   }
 
   return {
-    searchIssues: (params: Record<string, string>) => get<MetronPage<MetronIssueSummary>>('issue/', params),
-    getIssue: (id: number) => get<MetronIssueDetail>(`issue/${id}/`),
-    searchSeries: (params: Record<string, string>) =>
-      get<MetronPage<{ id: number; series: string; volume: number; year_began: number }>>('series/', params),
+    searchIssues: (params: Record<string, string>, budget?: CallBudget) =>
+      get<MetronPage<MetronIssueSummary>>('issue/', params, budget),
+    getIssue: (id: number, budget?: CallBudget) => get<MetronIssueDetail>(`issue/${id}/`, {}, budget),
+    searchSeries: (params: Record<string, string>, budget?: CallBudget) =>
+      get<MetronPage<MetronSeriesSummary>>('series/', params, budget),
+    callBudget: (ms: number): CallBudget => ({ deadline: now() + ms }),
   };
 }
 

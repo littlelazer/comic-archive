@@ -16,19 +16,23 @@ import { METRON_BASE_URL, createMetronClient, type MetronClient } from './metron
 //   177188, whose detail has isbn 9781643375434.
 // - Same title across volumes: `issue/?series_name=thor&number=1` has count 113 over more than one page,
 //   including Thor (1998), (2007), (2014), (2018), (2020) and (2025) #1.
+// - Hardcover trade: the same Thor search listed 188699, "Superman: The Last Days of Lex Luthor HC (2025) #1",
+//   alongside the 2023 limited series of that title.
 const THE_THING_1 = 13806;
 const THE_THING_BARCODE = '071486029663';
 const ASM_2022_1 = 44879;
 const ALICE_TPB_1 = 177188;
 const ALICE_ISBN = '9781643375434';
+const LEX_LUTHOR_HC_1 = 188699;
 const LIVE_TIMEOUT_MS = 120_000;
 
 function countingClient(client: MetronClient) {
   const counter = { requests: 0 };
   const counted: MetronClient = {
-    searchIssues: (params) => (counter.requests++, client.searchIssues(params)),
-    getIssue: (id) => (counter.requests++, client.getIssue(id)),
-    searchSeries: (params) => (counter.requests++, client.searchSeries(params)),
+    searchIssues: (params, budget) => (counter.requests++, client.searchIssues(params, budget)),
+    getIssue: (id, budget) => (counter.requests++, client.getIssue(id, budget)),
+    searchSeries: (params, budget) => (counter.requests++, client.searchSeries(params, budget)),
+    callBudget: client.callBudget,
   };
   return { client: counted, counter };
 }
@@ -94,6 +98,21 @@ describe.skipIf(!process.env.HTTPS_PROXY)('identifyComic against real Metron', (
       expect(withoutIsbn.verdict).toBe('probable');
       expect(withoutIsbn.candidates[0].metronId).toBe(ALICE_TPB_1);
       expect(withoutIsbn.missing).toContain('isbn');
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  test(
+    'live: a hardcover trade is found after the paperback search misses, within 4 requests',
+    async () => {
+      const { client: counted, counter } = countingClient(client);
+      const result = await identifyComic(
+        { series_title: 'Superman: The Last Days of Lex Luthor', issue_number: '1', format: 'trade' },
+        counted,
+      );
+      expect(result.verdict).toBe('probable');
+      expect(result.candidates[0].metronId).toBe(LEX_LUTHOR_HC_1);
+      expect(counter.requests).toBeLessThanOrEqual(4);
     },
     LIVE_TIMEOUT_MS,
   );

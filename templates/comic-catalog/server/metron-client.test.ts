@@ -133,6 +133,50 @@ describe('metron client error paths', () => {
     expect(sleeps).toEqual([]);
   });
 
+  test('a call budget past its deadline sends no request and names the last wait', async () => {
+    let calls = 0;
+    const { client } = clientFor(
+      standIn(() => {
+        calls++;
+        return new Response(emptyPage);
+      }),
+    );
+    const spent = client.callBudget(0);
+    expect(await client.searchIssues({ number: '1' }, spent)).toEqual({
+      ok: false,
+      reason: 'metron_unavailable',
+      retryable: true,
+    });
+    spent.lastWait = 'rate_limit';
+    expect(await client.getIssue(1, spent)).toEqual({ ok: false, reason: 'rate_limited', retryable: true });
+    expect(calls).toBe(0);
+  });
+
+  test('a 429 whose Retry-After outlasts the call budget is rate_limited without waiting', async () => {
+    const { client, sleeps } = clientFor(
+      standIn(() => new Response('', { status: 429, headers: { 'Retry-After': '25' } })),
+    );
+    expect(await client.searchSeries({ name: 'thing' }, client.callBudget(10_000))).toEqual({
+      ok: false,
+      reason: 'rate_limited',
+      retryable: true,
+      retryAfterSeconds: 25,
+    });
+    expect(sleeps).toEqual([]);
+  });
+
+  test('waits inside a call budget are recorded on it', async () => {
+    let calls = 0;
+    const { client } = clientFor(
+      standIn(() =>
+        ++calls === 1 ? new Response('', { status: 429, headers: { 'Retry-After': '3' } }) : new Response(emptyPage),
+      ),
+    );
+    const budget = client.callBudget(60_000);
+    expect((await client.searchIssues({ number: '1' }, budget)).ok).toBe(true);
+    expect(budget.lastWait).toBe('rate_limit');
+  });
+
   test('sends the User-Agent and no Authorization header', async () => {
     let seen: Headers | undefined;
     const { client } = clientFor(

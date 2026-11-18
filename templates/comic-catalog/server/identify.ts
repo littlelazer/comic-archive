@@ -26,11 +26,18 @@ export type IdentifyResult = { verdict: Verdict; candidates: Candidate[]; missin
 
 type Found = Omit<MatchInput, 'clues'>;
 
+// The client's lookups with this call's wait budget already bound.
+type Lookup = Pick<MetronClient, 'searchIssues' | 'getIssue' | 'searchSeries'>;
+
 // Metron stores old barcodes without their check digit and modern ones with it, so a prefix search uses the
 // 11 digits before the check digit, and only a 12-digit main plus a 5-digit add-on is looked up exactly.
 const UPC_BODY_LENGTH = 11;
 const FULL_ADDON_LENGTH = 5;
 const TRADE_SERIES_TYPE = 'Trade Paperback';
+// Bound trades that are not paperbacks, in the order they are preferred when a title has several.
+const BOUND_SERIES_TYPES = ['Hardcover', 'Omnibus'];
+// The spec's total wait per identify_comic call; once it has passed, no new Metron request starts.
+const CALL_WAIT_BUDGET_MS = 60_000;
 
 class LookupFailed extends Error {
   constructor(readonly result: LookupFailure) {
@@ -62,8 +69,12 @@ function unwrap<T>(result: MetronResult<T>, query: object): T {
   });
 }
 
-async function searchIssues(client: MetronClient, params: Record<string, string>) {
+async function searchIssues(client: Lookup, params: Record<string, string>) {
   return unwrap(await client.searchIssues(params), params);
+}
+
+async function searchSeries(client: Lookup, params: Record<string, string>) {
+  return unwrap(await client.searchSeries(params), params).results;
 }
 
 // Metron's series_name filter matches substrings, so a leading "The" is dropped to find "The Thing" from "Thing".
@@ -86,8 +97,12 @@ function found(page: MetronPage<MetronIssueSummary>, matchedBy: Found['matchedBy
   return { issues, totalCount: complete ? issues.length : page.count, matchedBy };
 }
 
-async function findSingleIssue(clues: Clues, client: MetronClient): Promise<Found | undefined> {
+async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | undefined> {
+  // The add-on is not read as an issue number: on old barcodes it is the cover month, and modern add-ons are
+  // covered by the exact UPC lookup.
   const number: Record<string, string> = clues.issueNumber ? { number: clues.issueNumber } : {};
+  // cover_month and publisher_name are not sent: a misread month would hide the issue, and a printed publisher
+  // ("Marvel Comics Group") does not match Metron's name ("Marvel"). The verdict still compares the month.
   const year: Record<string, string> = clues.coverYear ? { cover_year: String(clues.coverYear) } : {};
   const exactTried = clues.upcMain !== undefined && clues.upcAddon?.length === FULL_ADDON_LENGTH;
 
@@ -122,11 +137,24 @@ async function findSingleIssue(clues: Clues, client: MetronClient): Promise<Foun
   );
 }
 
-async function findTrade(clues: Clues, client: MetronClient): Promise<Found | undefined> {
+async function findTradeSeries(client: Lookup, title: string) {
+  const name = searchTitle(title);
+  const paperbacks = await searchSeries(client, { series_type: TRADE_SERIES_TYPE, name });
+  if (paperbacks.length > 0) return paperbacks;
+  // Metron's series_type filter takes one type (a list is a 400), so hardcovers and omnibuses come from one
+  // unfiltered title search, picked by type here, which keeps a trade lookup within 4 requests.
+  const all = await searchSeries(client, { name });
+  for (const type of BOUND_SERIES_TYPES) {
+    const ofType = all.filter((s) => s.series_type.name === type);
+    if (ofType.length > 0) return ofType;
+  }
+  return [];
+}
+
+async function findTrade(clues: Clues, client: Lookup): Promise<Found | undefined> {
   if (!clues.seriesTitle) return undefined;
   const title = clues.seriesTitle;
-  const query = { series_type: TRADE_SERIES_TYPE, name: searchTitle(title) };
-  const series = sameTitle(unwrap(await client.searchSeries(query), query).results, title, (s) => s.series);
+  const series = sameTitle(await findTradeSeries(client, title), title, (s) => s.series);
   if (series.length === 0) return undefined;
 
   // A trade's issue number is its volume number within the trade series.
@@ -146,7 +174,7 @@ async function findTrade(clues: Clues, client: MetronClient): Promise<Found | un
 
 // Variants, reprints and printing marks are only on an issue's detail, so the leading candidate is judged on
 // its detail. A detail that is not found means the search result was stale; the leader is then judged as found.
-async function judgeWithLeaderDetail(clues: Clues, client: MetronClient, match: Found) {
+async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found) {
   const first = decideVerdict({ clues, ...match });
   const leaderId = first.candidates[0]?.metronId;
   if (leaderId === undefined) return first;
@@ -163,10 +191,16 @@ async function judgeWithLeaderDetail(clues: Clues, client: MetronClient, match: 
 
 export async function identifyComic(raw: RawClues, client: MetronClient): Promise<IdentifyResult> {
   const clues = normalizeClues(raw);
+  const budget = client.callBudget(CALL_WAIT_BUDGET_MS);
+  const lookup: Lookup = {
+    searchIssues: (params) => client.searchIssues(params, budget),
+    getIssue: (id) => client.getIssue(id, budget),
+    searchSeries: (params) => client.searchSeries(params, budget),
+  };
   try {
-    const match = clues.format === 'trade' ? await findTrade(clues, client) : await findSingleIssue(clues, client);
+    const match = clues.format === 'trade' ? await findTrade(clues, lookup) : await findSingleIssue(clues, lookup);
     if (!match) return { verdict: 'no_match', candidates: [], missing: [] };
-    return await judgeWithLeaderDetail(clues, client, match);
+    return await judgeWithLeaderDetail(clues, lookup, match);
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;
