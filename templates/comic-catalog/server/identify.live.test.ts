@@ -133,7 +133,7 @@ describe.skipIf(!process.env.HTTPS_PROXY)('identifyComic against real Metron', (
     'live: nonexistent series is no_match',
     async () => {
       const result = await identifyComic({ series_title: 'Zzyzx Quantum Platypus Brigade', issue_number: '1' }, client);
-      expect(result).toEqual({ verdict: 'no_match', candidates: [], missing: [] });
+      expect(result).toEqual({ verdict: 'no_match', candidates: [], missing: [], searched: true });
     },
     LIVE_TIMEOUT_MS,
   );

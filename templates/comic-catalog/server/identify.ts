@@ -4,6 +4,7 @@ import { normalizeClues, type Clues, type RawClues } from './clues';
 import type { MetronClient, MetronIssueDetail, MetronIssueSummary, MetronPage, MetronResult } from './metron-client';
 import {
   decideVerdict,
+  missingFromClues,
   normalizeTitle,
   type Candidate,
   type MatchInput,
@@ -22,7 +23,11 @@ type LookupFailure = {
   missing: [];
 };
 
-export type IdentifyResult = { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } | LookupFailure;
+// searched is false when the clues were too thin to make any Metron search, so no_match then says nothing
+// about what Metron has.
+export type IdentifyResult =
+  | { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[]; searched: boolean }
+  | LookupFailure;
 
 type Found = Omit<MatchInput, 'clues'>;
 
@@ -131,11 +136,15 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
     // Skipped when a title can be searched instead or an exact lookup was made, to stay within 4 requests.
     // Trade-off: a full barcode and issue number with no title therefore never reach this series fallback.
     if (clues.issueNumber && !clues.seriesTitle && !exactTried) {
-      const seriesIds = new Set((await searchIssues(client, prefix)).results.map((issue) => issue.series.id));
+      const barcodePage = await searchIssues(client, prefix);
+      const seriesIds = new Set(barcodePage.results.map((issue) => issue.series.id));
       if (seriesIds.size === 1) {
         const [seriesId] = seriesIds;
         return found(await searchIssues(client, { series_id: String(seriesId), ...number, ...year }), 'upc_prefix');
       }
+      // With no title to choose between the series, the barcode's issues are the candidates; their numbers
+      // differ from the one read, so the verdict is at best probable.
+      if (seriesIds.size > 1) return found(barcodePage, 'upc_prefix');
     }
   }
 
@@ -209,15 +218,17 @@ async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found)
 export async function identifyComic(raw: RawClues, client: MetronClient): Promise<IdentifyResult> {
   const clues = normalizeClues(raw);
   const budget = client.callBudget(CALL_WAIT_BUDGET_MS);
+  let searched = false;
   const lookup: Lookup = {
-    searchIssues: (params) => client.searchIssues(params, budget),
+    searchIssues: (params) => ((searched = true), client.searchIssues(params, budget)),
     getIssue: (id) => client.getIssue(id, budget),
-    searchSeries: (params) => client.searchSeries(params, budget),
+    searchSeries: (params) => ((searched = true), client.searchSeries(params, budget)),
   };
   try {
     const match = clues.format === 'trade' ? await findTrade(clues, lookup) : await findSingleIssue(clues, lookup);
-    if (!match) return { verdict: 'no_match', candidates: [], missing: [] };
-    return await judgeWithLeaderDetail(clues, lookup, match);
+    if (!match && !searched) return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched };
+    if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched };
+    return { ...(await judgeWithLeaderDetail(clues, lookup, match)), searched };
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;

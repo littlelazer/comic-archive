@@ -61,6 +61,11 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/If `missing` is empty/);
   });
 
+  it('does not claim Metron lacks a comic when nothing was searched', () => {
+    expect(tpl.instructions).toMatch(/`searched` is false/);
+    expect(tpl.instructions).toMatch(/not that Metron has no match/i);
+  });
+
   it('reports every lookup_failed without naming a match and offers no retry for non-retryable ones', () => {
     expect(tpl.instructions).toMatch(/any `lookup_failed`, say what you read/);
     expect(tpl.instructions).toMatch(/never name a match/i);

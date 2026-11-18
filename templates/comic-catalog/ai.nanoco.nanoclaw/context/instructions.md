@@ -26,7 +26,7 @@ Reply by verdict:
 
 - `confirmed`: one line, for example `The Thing (1983) #1 · Metron 13806 · barcode + issue + Jul 1983 ✓`. Add "variant/printing not determined" when `variantOrPrintingUndetermined` is true, and "reprint/facsimile" when `isReprintOrFacsimile` is true.
 - `probable` or `ambiguous`: name the best candidate or candidates (up to 3), each with one sentence of evidence or conflict.
-- `no_match`: say what you read and that Metron has no match.
+- `no_match`: say what you read and that Metron has no match. But if `searched` is false, say instead that you couldn't read enough to search Metron, not that Metron has no match, and ask for the photo named by the first hint in `missing`.
 
 ## Asking for a photo
 

@@ -167,6 +167,11 @@ function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
   return missing;
 }
 
+// The hints that follow from the clues alone, for when no candidate was judged.
+export function missingFromClues(clues: Clues): MissingHint[] {
+  return missingHints(clues, []);
+}
+
 // Verdict rules (see "Verdict rules" in the Phase 2 design spec):
 // - no_match: Metron returned nothing. Candidates and missing are empty.
 // - ambiguous: Metron has more matches than were returned (totalCount > issues.length), or two or more

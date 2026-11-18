@@ -71,7 +71,7 @@ export function identifyComicTool(client: MetronClient): ToolDef {
   return {
     name: 'identify_comic',
     description:
-      'Identify a comic from the clues read off its cover photos and return a verdict (confirmed, probable, ambiguous, no_match or lookup_failed) with candidates, evidence and hints for which extra photo would help. Call it once per comic, after reading every photo of that comic. When the user asks to retry, call it again with the same clues. A failed lookup returns verdict lookup_failed with reason, retryable and retryAfterSeconds.',
+      'Identify a comic from the clues read off its cover photos and return a verdict (confirmed, probable, ambiguous, no_match or lookup_failed) with candidates, evidence, hints for which extra photo would help, and searched (false when the clues were too thin to search Metron at all). Call it once per comic, after reading every photo of that comic. When the user asks to retry, call it again with the same clues. A failed lookup returns verdict lookup_failed with reason, retryable and retryAfterSeconds.',
     inputSchema: { type: 'object', properties: CLUE_PROPERTIES, additionalProperties: false },
     handler: async (args) => identifyComic(parseClues(args), client),
   };

@@ -204,3 +204,65 @@ describe('cascade from a barcode prefix to the title search', () => {
     expect(result.candidates[0].metronId).toBe(13806);
   });
 });
+
+// Stand-in whose answers are chosen per request, recording each request's path and query.
+function standInMetron(answer: (url: URL) => Response) {
+  const requests: string[] = [];
+  const { client } = clientFor((req) => {
+    const url = new URL(req.url);
+    requests.push(url.pathname.replace('/api/', '') + url.search);
+    return answer(url);
+  });
+  return { client, requests };
+}
+
+const pageOf = (results: unknown[], count = results.length) =>
+  new Response(JSON.stringify({ count, next: count > results.length ? 'next' : null, results }));
+
+describe('what was searched', () => {
+  test('with no title and no barcode nothing is searched, and the hints say what to photograph', async () => {
+    const { client, requests } = standInMetron(() => new Response('', { status: 503 }));
+    expect(await identifyComic({ issue_number: '1', cover_year: 1983 }, client)).toEqual({
+      verdict: 'no_match',
+      candidates: [],
+      missing: ['barcode_closeup'],
+      searched: false,
+    });
+    expect(requests).toEqual([]);
+  });
+
+  test('a trade with only an ISBN is not searched, since Metron has no ISBN filter', async () => {
+    const { client, requests } = standInMetron(() => new Response('', { status: 503 }));
+    expect(await identifyComic({ isbn: '9781643375434' }, client)).toEqual({
+      verdict: 'no_match',
+      candidates: [],
+      missing: ['issue_number', 'cover_date'],
+      searched: false,
+    });
+    expect(requests).toEqual([]);
+  });
+
+  test('a title search that finds nothing is a searched no_match', async () => {
+    const { client } = standInMetron(() => pageOf([]));
+    expect(await identifyComic({ series_title: 'Zzyzx', issue_number: '1' }, client)).toEqual({
+      verdict: 'no_match',
+      candidates: [],
+      missing: [],
+      searched: true,
+    });
+  });
+
+  test('barcode hits across several series with no title are judged, never no_match', async () => {
+    const rom = { ...summary(500, 'Rom'), number: '6' };
+    const thing = { ...summary(13811, 'The Thing'), number: '6' };
+    const { client, requests } = standInMetron((url) => {
+      if (url.searchParams.has('number')) return pageOf([]);
+      if (url.searchParams.has('upc_starts_with')) return pageOf([rom, thing]);
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic({ upc_main: '071486029663', issue_number: '1' }, client);
+    expect(result).toMatchObject({ verdict: 'probable', searched: true });
+    expect(result.candidates.map((c) => c.metronId)).toEqual([500, 13811]);
+    expect(requests.length).toBeLessThanOrEqual(4);
+  });
+});
