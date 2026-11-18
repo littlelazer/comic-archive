@@ -92,6 +92,23 @@ describe('metron client error paths', () => {
     expect(sleeps).toEqual([1000, 2000]);
   });
 
+  test('retries a 200 whose body is not JSON then reports metron_unavailable', async () => {
+    let calls = 0;
+    const { client, sleeps } = clientFor(
+      standIn(() => {
+        calls++;
+        return new Response('<html>Bad gateway</html>', { status: 200 });
+      }),
+    );
+    expect(await client.searchIssues({ number: '1' })).toEqual({
+      ok: false,
+      reason: 'metron_unavailable',
+      retryable: true,
+    });
+    expect(calls).toBe(3);
+    expect(sleeps).toEqual([1000, 2000]);
+  });
+
   test('times out a hung request', async () => {
     const { client } = clientFor(
       standIn(() => new Promise<Response>(() => {})),

@@ -114,7 +114,14 @@ export function createMetronClient(opts: MetronClientOptions) {
       }
       noteBurst(res);
 
-      if (res.ok) return { ok: true, data: (await res.json()) as T };
+      if (res.ok) {
+        try {
+          return { ok: true, data: (await res.json()) as T };
+        } catch {
+          // A body that is not JSON (a proxy's HTML page) or times out while downloading is a server error.
+          res = new Response(null, { status: 599 });
+        }
+      }
       if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', retryable: false };
       if (res.status === 404) return { ok: false, reason: 'not_found', retryable: false };
 
