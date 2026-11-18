@@ -158,7 +158,7 @@ describe('judging with the leader detail', () => {
     const result = judgeWithDetail(clues, match, leader);
     expect(result.verdict).toBe('probable');
     expect(result.candidates.map((c) => c.metronId)).toEqual([2, 1]);
-    expect(result.missing).toEqual(['barcode_addon']);
+    expect(result.missing).toEqual([]);
   });
 
   test('the leader whose detail agrees can still confirm', () => {

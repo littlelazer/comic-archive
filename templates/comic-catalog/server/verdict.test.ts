@@ -185,7 +185,7 @@ describe('decideVerdict', () => {
     const result = decideVerdict({ ...input, confirmOnlyId: 1 });
     expect(result.verdict).toBe('probable');
     expect(result.candidates[0].metronId).toBe(2);
-    expect(result.missing).toEqual(['barcode_addon']);
+    expect(result.missing).toEqual([]);
     expect(decideVerdict({ ...input, confirmOnlyId: 2 }).verdict).toBe('confirmed');
   });
 
@@ -239,6 +239,20 @@ describe('decideVerdict', () => {
     });
     expect(result.verdict).toBe('probable');
     expect(result.missing).toEqual(['issue_number', 'cover_date', 'barcode_addon']);
+  });
+
+  test('asks for the add-on only on covers from the 5-digit add-on era, whose add-on pins the issue', () => {
+    const missingFor = (coverYear: number) =>
+      decideVerdict({
+        clues: clues({ seriesTitle: 'The Thing', upcMain: '071486029661', coverYear }),
+        issues: [summary({ cover_date: `${coverYear}-07-01` })],
+        totalCount: 1,
+        matchedBy: 'upc_prefix',
+      }).missing;
+    expect(missingFor(1983)).not.toContain('barcode_addon');
+    expect(missingFor(2007)).not.toContain('barcode_addon');
+    expect(missingFor(2008)).toContain('barcode_addon');
+    expect(missingFor(2022)).toContain('barcode_addon');
   });
 
   test('confirms a later printing at issue level and flags variantOrPrintingUndetermined when variants exist', () => {

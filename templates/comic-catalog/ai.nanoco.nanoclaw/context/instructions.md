@@ -32,7 +32,7 @@ Reply by verdict:
 
 Only when the verdict is not `confirmed`, turn the `missing` hints into ONE specific photo request, with its reason. Use the first hint in `missing`. If `missing` is empty, don't ask for a photo.
 
-- `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits identify the issue.
+- `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits pin down the exact issue on modern comics.
 - `indicia`: the inside front cover or first page fine print, for the printing and date.
 - `isbn`: the back cover or copyright page, for the ISBN.
 - `cover_date` or `issue_number`: whichever photo shows it.

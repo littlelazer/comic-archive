@@ -35,6 +35,10 @@ type MetronIssue = MetronIssueSummary | MetronIssueDetail;
 const MAX_CANDIDATES = 5;
 const BARCODE_BODY_LENGTH = 11;
 const FIRST_BARCODE_YEAR = 1977;
+// Before 5-digit add-ons, the 2-digit add-on is the cover month and does not narrow the issue. The live
+// findings (Phase 2 Task 5) show 2-digit add-ons in 1983-84 and 5-digit ones in 2022 but do not pin the
+// change-over, so 2008 is used as the first year of 5-digit add-ons.
+const FIRST_FULL_ADDON_YEAR = 2008;
 
 // A candidate plus which clues agreed, which decideVerdict needs for its confirm rule.
 interface Assessment {
@@ -154,7 +158,8 @@ function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
   } else {
     const barcodeEra = clues.coverYear === undefined || clues.coverYear >= FIRST_BARCODE_YEAR;
     if (clues.upcMain === undefined && barcodeEra) missing.push('barcode_closeup');
-    if (clues.upcMain !== undefined && clues.upcAddon === undefined) missing.push('barcode_addon');
+    const fullAddonEra = clues.coverYear === undefined || clues.coverYear >= FIRST_FULL_ADDON_YEAR;
+    if (clues.upcMain !== undefined && clues.upcAddon === undefined && fullAddonEra) missing.push('barcode_addon');
   }
   if (listed.some((a) => a.printingConflict) || listed[0]?.candidate.variantOrPrintingUndetermined) {
     missing.push('indicia');
@@ -179,9 +184,9 @@ function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
 // - With confirmOnlyId set, a sole conflict-free candidate with any other id is probable, not confirmed.
 // - Candidates are ranked by fewest conflicts, then most evidence, then Metron's order, and capped at 5.
 // - missing (only when not confirmed): issue_number, cover_date, then barcode_closeup (no barcode read and the
-//   cover year is 1977 or later or unknown) / barcode_addon (main read, add-on not) for single issues or isbn
-//   for trades, then indicia when a listed candidate has a printing conflict or the top candidate has
-//   variantOrPrintingUndetermined.
+//   cover year is 1977 or later or unknown) / barcode_addon (main read, add-on not, and the cover year is 2008
+//   or later or unknown) for single issues or isbn for trades, then indicia when a listed candidate has a
+//   printing conflict or the top candidate has variantOrPrintingUndetermined.
 export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } {
   const { clues, issues, totalCount, matchedBy, confirmOnlyId } = input;
   if (issues.length === 0) return { verdict: 'no_match', candidates: [], missing: [] };
