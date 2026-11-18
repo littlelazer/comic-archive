@@ -1,7 +1,7 @@
 // ABOUTME: Runs the Metron search cascade for the clues read off a cover and returns the verdict with candidates.
 // ABOUTME: Single issues go barcode exact, barcode prefix, then series and number; trades go series then volume.
 import { normalizeClues, type Clues, type RawClues } from './clues';
-import type { MetronClient, MetronIssueSummary, MetronPage, MetronResult } from './metron-client';
+import type { MetronClient, MetronIssueDetail, MetronIssueSummary, MetronPage, MetronResult } from './metron-client';
 import {
   decideVerdict,
   normalizeTitle,
@@ -97,6 +97,14 @@ function found(page: MetronPage<MetronIssueSummary>, matchedBy: Found['matchedBy
   return { issues, totalCount: complete ? issues.length : page.count, matchedBy };
 }
 
+// A barcode-prefix hit is never decisive on its own: when a title was read and no hit is in that series, a
+// misread digit may have landed on another series' barcode, so the title search must run.
+export function prefixHitStands(clues: Clues, hits: MetronIssueSummary[]): boolean {
+  if (clues.seriesTitle === undefined) return true;
+  const wanted = normalizeTitle(clues.seriesTitle);
+  return hits.some((issue) => normalizeTitle(issue.series.name) === wanted);
+}
+
 async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | undefined> {
   // The add-on is not read as an issue number: on old barcodes it is the cover month, and modern add-ons are
   // covered by the exact UPC lookup.
@@ -114,10 +122,11 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
   if (clues.upcMain) {
     const prefix = { upc_starts_with: clues.upcMain.slice(0, UPC_BODY_LENGTH) };
     const page = await searchIssues(client, { ...prefix, ...number });
-    if (page.results.length > 0) return found(page, 'upc_prefix');
+    if (page.results.length > 0 && prefixHitStands(clues, page.results)) return found(page, 'upc_prefix');
 
     // Metron lacks barcodes for some issues, so the barcode's other issues name the series to look in.
     // Skipped when a title can be searched instead or an exact lookup was made, to stay within 4 requests.
+    // Trade-off: a full barcode and issue number with no title therefore never reach this series fallback.
     if (clues.issueNumber && !clues.seriesTitle && !exactTried) {
       const seriesIds = new Set((await searchIssues(client, prefix)).results.map((issue) => issue.series.id));
       if (seriesIds.size === 1) {
@@ -172,6 +181,13 @@ async function findTrade(clues: Clues, client: Lookup): Promise<Found | undefine
   );
 }
 
+// Re-judges with the leader replaced by its detail. Only the leader, whose barcode and reprint status were
+// checked, may be confirmed; a runner-up left as the only fit is still a summary, so it is at best probable.
+export function judgeWithDetail(clues: Clues, match: Found, leader: MetronIssueDetail) {
+  const issues = match.issues.map((issue) => (issue.id === leader.id ? leader : issue));
+  return decideVerdict({ clues, ...match, issues, confirmOnlyId: leader.id });
+}
+
 // Variants, reprints and printing marks are only on an issue's detail, so the leading candidate is judged on
 // its detail. A detail that is not found means the search result was stale; the leader is then judged as found.
 async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found) {
@@ -181,12 +197,7 @@ async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found)
 
   const result = await client.getIssue(leaderId);
   if (!result.ok && result.reason === 'not_found') return first;
-  const leader = unwrap(result, { issue: leaderId });
-  return decideVerdict({
-    clues,
-    ...match,
-    issues: match.issues.map((issue) => (issue.id === leaderId ? leader : issue)),
-  });
+  return judgeWithDetail(clues, match, unwrap(result, { issue: leaderId }));
 }
 
 export async function identifyComic(raw: RawClues, client: MetronClient): Promise<IdentifyResult> {

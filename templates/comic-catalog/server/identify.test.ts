@@ -1,8 +1,9 @@
 // ABOUTME: Error-path tests for identifyComic against a local stand-in that answers only with Metron failures.
 // ABOUTME: Normal identification is tested against real Metron in identify.live.test.ts.
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import { identifyComic } from './identify';
-import { createMetronClient } from './metron-client';
+import { identifyComic, judgeWithDetail, prefixHitStands } from './identify';
+import { normalizeClues } from './clues';
+import { createMetronClient, type MetronIssueSummary } from './metron-client';
 
 const servers: ReturnType<typeof Bun.serve>[] = [];
 const THING_1 = { series_title: 'The Thing', issue_number: '1', cover_year: 1983 };
@@ -109,5 +110,62 @@ describe('identifyComic total wait per call', () => {
     );
     expect(result).toMatchObject({ verdict: 'lookup_failed', reason: 'rate_limited', retryable: true });
     expect(total(sleeps)).toBeLessThanOrEqual(60_000);
+  });
+});
+
+function summary(id: number, seriesName: string): MetronIssueSummary {
+  return {
+    id,
+    series: { id: id * 10, name: seriesName, volume: 1, year_began: 1983 },
+    number: '1',
+    issue: `${seriesName} (1983) #1`,
+    cover_date: '1983-07-01',
+    image: null,
+  };
+}
+
+describe('barcode prefix hits', () => {
+  test('stand when no title was read', () => {
+    expect(prefixHitStands(normalizeClues({ upc_main: '071486029663' }), [summary(1, 'Rom')])).toBe(true);
+  });
+
+  test('stand when a hit is in the series the title names', () => {
+    const clues = normalizeClues({ series_title: 'Thing', upc_main: '071486029663' });
+    expect(prefixHitStands(clues, [summary(1, 'Rom'), summary(2, 'The Thing')])).toBe(true);
+  });
+
+  test('do not stand when no hit is in the series the title names', () => {
+    const clues = normalizeClues({ series_title: 'The Thing', upc_main: '071486029663' });
+    expect(prefixHitStands(clues, [summary(1, 'Rom')])).toBe(false);
+  });
+});
+
+describe('judging with the leader detail', () => {
+  test('a runner-up left as the only fit after the leader detail conflicts is probable, not confirmed', () => {
+    const clues = normalizeClues({
+      series_title: 'The Thing',
+      issue_number: '1',
+      cover_year: 1983,
+      upc_main: '071486029663',
+    });
+    const { issue: _issue, ...leaderSummary } = summary(1, 'The Thing');
+    const leader = { ...leaderSummary, upc: '0799999999901', isbn: '', variants: [], reprints: [] };
+    const match = {
+      issues: [summary(1, 'The Thing'), summary(2, 'The Thing')],
+      totalCount: 2,
+      matchedBy: 'series_number' as const,
+    };
+    const result = judgeWithDetail(clues, match, leader);
+    expect(result.verdict).toBe('probable');
+    expect(result.candidates.map((c) => c.metronId)).toEqual([2, 1]);
+    expect(result.missing).toEqual(['barcode_addon']);
+  });
+
+  test('the leader whose detail agrees can still confirm', () => {
+    const clues = normalizeClues({ series_title: 'The Thing', issue_number: '1', cover_year: 1983 });
+    const { issue: _issue, ...leaderSummary } = summary(1, 'The Thing');
+    const leader = { ...leaderSummary, upc: '', isbn: '', variants: [], reprints: [] };
+    const match = { issues: [summary(1, 'The Thing')], totalCount: 1, matchedBy: 'series_number' as const };
+    expect(judgeWithDetail(clues, match, leader).verdict).toBe('confirmed');
   });
 });

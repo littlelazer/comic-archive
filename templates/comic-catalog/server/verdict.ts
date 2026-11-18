@@ -26,6 +26,8 @@ export interface MatchInput {
   issues: (MetronIssueSummary | MetronIssueDetail)[];
   totalCount: number;
   matchedBy: 'upc_exact' | 'upc_prefix' | 'series_number' | 'trade_isbn' | 'trade_title';
+  // When set, only this candidate may be confirmed: the one whose detail was checked.
+  confirmOnlyId?: number;
 }
 
 type MetronIssue = MetronIssueSummary | MetronIssueDetail;
@@ -174,13 +176,14 @@ function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
 //   variantOrPrintingUndetermined when Metron lists variants. A reprint or facsimile mark on the cover against
 //   a candidate Metron lists as an original is a conflict and blocks confirmed. A reprint candidate whose cover
 //   has no mark is not a conflict; it only sets isReprintOrFacsimile.
+// - With confirmOnlyId set, a sole conflict-free candidate with any other id is probable, not confirmed.
 // - Candidates are ranked by fewest conflicts, then most evidence, then Metron's order, and capped at 5.
 // - missing (only when not confirmed): issue_number, cover_date, then barcode_closeup (no barcode read and the
 //   cover year is 1977 or later or unknown) / barcode_addon (main read, add-on not) for single issues or isbn
 //   for trades, then indicia when a listed candidate has a printing conflict or the top candidate has
 //   variantOrPrintingUndetermined.
 export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } {
-  const { clues, issues, totalCount, matchedBy } = input;
+  const { clues, issues, totalCount, matchedBy, confirmOnlyId } = input;
   if (issues.length === 0) return { verdict: 'no_match', candidates: [], missing: [] };
 
   const ranked = issues
@@ -199,7 +202,11 @@ export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates
   const conflictFree = ranked.filter((a) => a.candidate.conflicts.length === 0);
   let verdict: Verdict = 'probable';
   if (totalCount > issues.length || conflictFree.length >= 2) verdict = 'ambiguous';
-  else if (conflictFree.length === 1 && meetsConfirmCondition(clues, matchedBy, conflictFree[0])) {
+  else if (
+    conflictFree.length === 1 &&
+    (confirmOnlyId === undefined || conflictFree[0].candidate.metronId === confirmOnlyId) &&
+    meetsConfirmCondition(clues, matchedBy, conflictFree[0])
+  ) {
     verdict = 'confirmed';
   }
 

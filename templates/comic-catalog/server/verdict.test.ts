@@ -174,6 +174,21 @@ describe('decideVerdict', () => {
     expect(result.candidates).toHaveLength(2);
   });
 
+  test('confirmOnlyId lets only that candidate confirm; another sole fit is probable with the usual hints', () => {
+    const input = {
+      clues: clues({ ...TITLE_NUMBER_YEAR, upcMain: '071486029663' }),
+      issues: [detail({ id: 1, upc: '0799999999901' }), summary({ id: 2 })],
+      totalCount: 2,
+      matchedBy: 'series_number' as const,
+    };
+    expect(decideVerdict(input).verdict).toBe('confirmed');
+    const result = decideVerdict({ ...input, confirmOnlyId: 1 });
+    expect(result.verdict).toBe('probable');
+    expect(result.candidates[0].metronId).toBe(2);
+    expect(result.missing).toEqual(['barcode_addon']);
+    expect(decideVerdict({ ...input, confirmOnlyId: 2 }).verdict).toBe('confirmed');
+  });
+
   test('is ambiguous when totalCount exceeds returned results', () => {
     const result = decideVerdict({ clues: clues(TITLE_NUMBER_YEAR), issues: [summary()], totalCount: 7, matchedBy: 'series_number' });
     expect(result.verdict).toBe('ambiguous');
