@@ -98,7 +98,7 @@ Returns:
 - `verdict`: `confirmed` \| `probable` \| `ambiguous` \| `no_match` \| `lookup_failed`
 - `candidates[]` (best first, capped, e.g. 5): Metron ID, series name + volume + year began, number, cover date, publisher, cover image URL, `evidence[]` (which clues agreed, in words), `conflicts[]` (which clues disagreed)
 - `missing[]`: machine-readable hints of what evidence would settle it — e.g. `barcode_closeup`, `barcode_addon`, `indicia`, `isbn`, `issue_number`, `cover_date`. The agent turns these into a specific photo request.
-- `lookup_failed` carries a reason (`rate_limited`, `metron_unavailable`, `auth`) and never candidates it did not get from Metron.
+- `lookup_failed` carries a reason (`rate_limited`, `metron_unavailable`, `auth`) and never candidates it did not get from Metron. It also carries `retryable` (true for `rate_limited` and `metron_unavailable`, false for `auth`) and, when Metron gave one, the seconds until a retry should work.
 
 **`get_comic(metron_id)`** — issue detail: UPC, ISBN, variants (names only), reprints, so the agent can mention reprint/facsimile status and "variant not determined".
 
@@ -132,9 +132,13 @@ No numeric confidence score in Phase 2; the verdict and evidence lists are the o
 - Timeouts and 5xx: bounded retry, then `lookup_failed: metron_unavailable`. `401/403`: `lookup_failed: auth` (gateway grant or token problem), no retry.
 - Not-found is `no_match`, never an error.
 
+### Retrying a failed lookup in the thread (decided by littlelazer)
+
+When a lookup fails for a temporary reason (`retryable: true`), the reply says so, says roughly when it should work, and invites a retry: e.g. "Metron is busy. Reply *retry* here in a minute or so." Any reply in that thread asking to try again ("retry", "try again") makes the agent call `identify_comic` again with the clues it already read; the photos need not be re-sent. The thread is the comic's own session (one comic per message), so the agent still has those clues. `auth` failures are not offered a retry; the reply says the Metron connection needs fixing. Each retry is one more bounded attempt, not an automatic loop.
+
 ### Agent instructions (template `instructions.md`)
 
-Extend the Phase 1 instructions: read every image; extract clues without guessing; call `identify_comic`; reply in one line for `confirmed`; for other verdicts, give the best candidate(s) with the evidence in a sentence and turn `missing[]` into one specific photo request; mention reprint/facsimile and "variant not determined" when `get_comic` shows them; on `lookup_failed` say what was read and that the lookup will work on retry, without inventing a match. The "Records" rule (no writes) stays.
+Extend the Phase 1 instructions: read every image; extract clues without guessing; call `identify_comic`; reply in one line for `confirmed`; for other verdicts, give the best candidate(s) with the evidence in a sentence and turn `missing[]` into one specific photo request; mention reprint/facsimile and "variant not determined" when `get_comic` shows them; on `lookup_failed` say what was read, without inventing a match, and for a retryable failure invite a reply of *retry* in the thread (see above). The "Records" rule (no writes) stays.
 
 ### Deployment of the change
 
@@ -145,7 +149,7 @@ The group was stamped from the template; template changes reach it by restamping
 - **Unit** (Bun test): clue normalization (issue numbers, barcode main/add-on splitting), cascade step selection, verdict rules (each rule and each conflict case), `missing[]` derivation, 429/Retry-After and failure handling.
 - **Integration**: the server against Metron through the gateway as ComicCatalog (`onecli run --agent <ComicCatalog identifier> -- …`), using known issues: *The Thing* (1983) #1 (Metron 13806, barcode prefix `07148602966`), a modern issue with a full 17-digit barcode, a trade, and a nonexistent issue.
 - **Error paths** (decided by littlelazer): normal behavior is tested only against real Metron. For 429/`Retry-After`, low `Burst-Remaining`, 5xx, timeouts and 401/403, tests start a throwaway local HTTP server that answers the way Metron does, and point the server's Metron base URL at it. The stand-in exists only inside tests; the product has no fake or offline mode.
-- **End-to-end** (decided by littlelazer): a written manual checklist, not an automated Slack harness. littlelazer posts in `#comic-archive` (1) a cover that should confirm, (2) a cover with a cut-off barcode, then answers the photo request in-thread, (3) a comic Metron lacks. Claude checks the logs and session DBs and records results in `docs/comic-archive/`. Run at Phase 2 acceptance and after any change to what the agent says in Slack (instructions, reply format, photo requests). Revisit automation if this becomes frequent.
+- **End-to-end** (decided by littlelazer): a written manual checklist, not an automated Slack harness. littlelazer posts in `#comic-archive` (1) a cover that should confirm, (2) a cover with a cut-off barcode, then answers the photo request in-thread, (3) a comic Metron lacks. A retryable failure cannot be forced on demand against real Metron, so the in-thread retry is checked when one occurs naturally; the tool's `retryable` output is covered by the error-path tests. Claude checks the logs and session DBs and records results in `docs/comic-archive/`. Run at Phase 2 acceptance and after any change to what the agent says in Slack (instructions, reply format, photo requests). Revisit automation if this becomes frequent.
 - The existing template test (`src/templates/comic-catalog-template.test.ts`) gains checks that `mcp.json` declares the server and the instructions keep the no-guess and no-write rules.
 
 ## Acceptance (from PLAN.md, made concrete)
