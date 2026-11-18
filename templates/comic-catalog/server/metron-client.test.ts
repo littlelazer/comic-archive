@@ -117,6 +117,22 @@ describe('metron client error paths', () => {
     expect(sleeps).toEqual([]);
   });
 
+  test.each([
+    [404, 'not_found'],
+    [400, 'bad_request'],
+  ] as const)('maps %d to %s without retry', async (status, reason) => {
+    let calls = 0;
+    const { client, sleeps } = clientFor(
+      standIn(() => {
+        calls++;
+        return new Response('', { status });
+      }),
+    );
+    expect(await client.getIssue(1)).toEqual({ ok: false, reason, retryable: false });
+    expect(calls).toBe(1);
+    expect(sleeps).toEqual([]);
+  });
+
   test('sends the User-Agent and no Authorization header', async () => {
     let seen: Headers | undefined;
     const { client } = clientFor(

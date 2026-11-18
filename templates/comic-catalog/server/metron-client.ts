@@ -3,7 +3,7 @@
 
 export const METRON_BASE_URL = 'https://metron.cloud/api/';
 
-export type FailureReason = 'rate_limited' | 'metron_unavailable' | 'auth';
+export type FailureReason = 'rate_limited' | 'metron_unavailable' | 'auth' | 'not_found' | 'bad_request';
 
 export type MetronResult<T> =
   | { ok: true; data: T }
@@ -74,6 +74,7 @@ export function createMetronClient(opts: MetronClientOptions) {
       await sleep(ms);
     };
 
+    // A burst wait longer than the budget is skipped: the request is sent and Metron's own 429 handling applies.
     const burstWaitMs = slowUntil - Date.now();
     if (burstWaitMs > 0 && burstWaitMs <= totalWaitBudgetMs) await wait(burstWaitMs);
 
@@ -92,6 +93,7 @@ export function createMetronClient(opts: MetronClientOptions) {
 
       if (res.ok) return { ok: true, data: (await res.json()) as T };
       if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', retryable: false };
+      if (res.status === 404) return { ok: false, reason: 'not_found', retryable: false };
 
       if (res.status === 429) {
         const retryAfterSeconds = Number(res.headers.get('Retry-After')) || DEFAULT_RETRY_AFTER_SECONDS;
@@ -106,6 +108,7 @@ export function createMetronClient(opts: MetronClientOptions) {
         await wait(SERVER_ERROR_BACKOFF_MS[serverErrors++]);
         continue;
       }
+      if (res.status >= 400 && res.status < 500) return { ok: false, reason: 'bad_request', retryable: false };
       return unavailable;
     }
   }
