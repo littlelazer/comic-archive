@@ -2,7 +2,7 @@
 // ABOUTME: Covers argument validation and passing failure results through without isError.
 import { describe, expect, test } from 'bun:test';
 import type { MetronClient } from './metron-client';
-import { getComicTool, identifyComicTool } from './tools';
+import { getComicTool, identifyComicTool, parseClues } from './tools';
 
 const failure = { ok: false, reason: 'not_found', retryable: false } as const;
 const client = {
@@ -78,5 +78,11 @@ describe('identifyComicTool', () => {
 
   test('rejects arguments that are not an object', async () => {
     await expect(tool.handler(null)).rejects.toThrow(/object/);
+  });
+
+  test('treats a null clue as absent', async () => {
+    expect(parseClues({ series_title: 'The Thing', cover_year: null, upc_addon: null })).toEqual({ series_title: 'The Thing' });
+    const result = await tool.handler({ series_title: 'The Thing', issue_number: null });
+    expect(result).toMatchObject({ verdict: 'lookup_failed', reason: 'rate_limited' });
   });
 });

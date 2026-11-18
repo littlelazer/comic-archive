@@ -47,20 +47,24 @@ const CLUE_TYPES: Record<string, 'string' | 'integer'> = Object.fromEntries(
   Object.entries(CLUE_PROPERTIES).map(([name, { type }]) => [name, type as 'string' | 'integer']),
 );
 
-function parseClues(args: unknown): RawClues {
+// A null clue means the agent could not read it, so it is dropped like an omitted one.
+export function parseClues(args: unknown): RawClues {
   if (typeof args !== 'object' || args === null || Array.isArray(args)) {
     throw new Error('arguments must be an object');
   }
+  const clues: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(args)) {
     const type = CLUE_TYPES[name];
     if (!type) throw new Error(`unknown property: ${name}`);
+    if (value === null) continue;
     if (type === 'string' && typeof value !== 'string') throw new Error(`${name} must be a string`);
     if (type === 'integer' && !Number.isInteger(value)) throw new Error(`${name} must be an integer`);
     if (name === 'format' && !FORMATS.includes(value as string)) {
       throw new Error(`format must be one of ${FORMATS.join(', ')}`);
     }
+    clues[name] = value;
   }
-  return args as RawClues;
+  return clues as RawClues;
 }
 
 export function identifyComicTool(client: MetronClient): ToolDef {
