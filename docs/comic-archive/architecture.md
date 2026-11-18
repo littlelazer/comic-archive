@@ -33,5 +33,6 @@ The template is stamped into a group with `ncl groups create --template comic-ca
 | `@chat-adapter/slack` download with bot token | Saved file could be an HTML login page | Verified in Phase 1 live test: the saved inbox file is the real PNG |
 | No size or MIME cap on inbound attachments (core) | Large uploads go base64 through memory and the DB | Document; validate in comic tools (Phase 2); consider upstream issue |
 | No per-group tool restriction; all agents run `bypassPermissions` with Bash | Agent instructions cannot be the write-authorization boundary | Enforce in MCP tool code and gateway grants (Phase 4) |
-| Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Configure read-only hosts / grants when tools land |
-| Metron HTTP Basic auth via OneCLI generic secret has no repo precedent | Credential injection may need another shape | Test in Phase 2 |
+| Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Metron: no prompt on a granted secret (verified). Recheck for Airtable writes |
+| Metron credential via OneCLI | Resolved | API token as a generic secret (`metron`, host `metron.cloud`, path `/api/*`, `Authorization: Bearer {value}`), granted to ComicCatalog only. Verified with `onecli run --agent <ComicCatalog identifier> -- curl …` |
+| Pre-2000s UPCs identify the series, not the issue (issue is in the add-on digits) | `upc_starts_with` returns many issues, and Metron lacks UPCs for some | Use UPC to narrow the series, then `series_name` + `number` (+ `cover_year`); never accept a UPC hit alone |
