@@ -21,6 +21,13 @@ describe('comic-catalog template', () => {
     expect(tpl.report).toEqual([]);
   });
 
+  it('declares the comic-catalog stdio server run by bun', () => {
+    expect(tpl.mcpServers['comic-catalog']).toMatchObject({
+      command: 'bun',
+      args: ['${PLUGIN_ROOT}/server/index.ts'],
+    });
+  });
+
   it('tells the agent to Read image attachments before replying', () => {
     expect(tpl.instructions).toMatch(/`Read`/);
     expect(tpl.instructions).toMatch(/\/workspace\/inbox\//);
