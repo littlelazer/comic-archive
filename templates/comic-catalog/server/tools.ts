@@ -1,5 +1,7 @@
-// ABOUTME: MCP tool definitions for the comic catalog, starting with get_comic.
+// ABOUTME: MCP tool definitions for the comic catalog: identify_comic and get_comic.
 // ABOUTME: Lookup failures are returned as result objects so the agent can decide how to report them.
+import type { RawClues } from './clues';
+import { identifyComic } from './identify';
 import type { MetronClient } from './metron-client';
 import type { ToolDef } from './mcp-stdio';
 
@@ -21,5 +23,52 @@ export function getComicTool(client: MetronClient): ToolDef {
       const result = await client.getIssue(metronId);
       return result.ok ? result.data : result;
     },
+  };
+}
+
+const LEGIBLE = 'Give it only if it is legible on the photo; never guess.';
+const FORMATS = ['single_issue', 'trade', 'unknown'];
+
+const CLUE_PROPERTIES = {
+  series_title: { type: 'string', description: `Series title as printed on the cover. ${LEGIBLE}` },
+  issue_number: { type: 'string', description: `Issue number exactly as printed, for example "1" or "12A". ${LEGIBLE}` },
+  publisher: { type: 'string', description: `Publisher name or logo text. ${LEGIBLE}` },
+  cover_month: { type: 'integer', description: `Month (1-12) of the cover date. ${LEGIBLE}` },
+  cover_year: { type: 'integer', description: `Four-digit year of the cover date. ${LEGIBLE}` },
+  price: { type: 'string', description: `Cover price as printed, for example "$1.25". ${LEGIBLE}` },
+  upc_main: { type: 'string', description: `The 12 digits under the main barcode. ${LEGIBLE}` },
+  upc_addon: { type: 'string', description: `The small 2- or 5-digit code beside the main barcode. ${LEGIBLE}` },
+  isbn: { type: 'string', description: `ISBN printed on a trade paperback or hardcover. ${LEGIBLE}` },
+  format: { type: 'string', enum: FORMATS, description: `Whether the cover is a single issue or a trade collection. ${LEGIBLE}` },
+  printing: { type: 'string', description: `Printing or edition marking, for example "2nd printing" or "facsimile edition". ${LEGIBLE}` },
+};
+
+const CLUE_TYPES: Record<string, 'string' | 'integer'> = Object.fromEntries(
+  Object.entries(CLUE_PROPERTIES).map(([name, { type }]) => [name, type as 'string' | 'integer']),
+);
+
+function parseClues(args: unknown): RawClues {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('arguments must be an object');
+  }
+  for (const [name, value] of Object.entries(args)) {
+    const type = CLUE_TYPES[name];
+    if (!type) throw new Error(`unknown property: ${name}`);
+    if (type === 'string' && typeof value !== 'string') throw new Error(`${name} must be a string`);
+    if (type === 'integer' && !Number.isInteger(value)) throw new Error(`${name} must be an integer`);
+    if (name === 'format' && !FORMATS.includes(value as string)) {
+      throw new Error(`format must be one of ${FORMATS.join(', ')}`);
+    }
+  }
+  return args as RawClues;
+}
+
+export function identifyComicTool(client: MetronClient): ToolDef {
+  return {
+    name: 'identify_comic',
+    description:
+      'Identify a comic from the clues read off its cover photos and return a verdict (confirmed, probable, ambiguous, no_match or lookup_failed) with candidates, evidence and hints for which extra photo would help. Call it once per comic, after reading every photo of that comic. When the user asks to retry, call it again with the same clues. A failed lookup returns verdict lookup_failed with reason, retryable and retryAfterSeconds.',
+    inputSchema: { type: 'object', properties: CLUE_PROPERTIES, additionalProperties: false },
+    handler: async (args) => identifyComic(parseClues(args), client),
   };
 }

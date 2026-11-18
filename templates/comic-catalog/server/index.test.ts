@@ -1,11 +1,11 @@
 // ABOUTME: Spawns the real stdio server process and exercises it over JSON-RPC.
-// ABOUTME: Confirms the entry point speaks MCP on stdout and advertises get_comic.
+// ABOUTME: Confirms the entry point speaks MCP on stdout and advertises identify_comic and get_comic.
 import { expect, test } from 'bun:test';
 import path from 'path';
 
 const SERVER = path.join(import.meta.dir, 'index.ts');
 
-test('spawned server lists get_comic', async () => {
+test('spawned server lists identify_comic and get_comic', async () => {
   const proc = Bun.spawn([process.execPath, SERVER], { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' });
   proc.stdin.write(
     JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } }) + '\n',
@@ -23,4 +23,7 @@ test('spawned server lists get_comic', async () => {
   expect(getComic).toBeDefined();
   expect(getComic.inputSchema.required).toEqual(['metron_id']);
   expect(getComic.inputSchema.properties.metron_id.type).toBe('integer');
+  const identify = replies[1].result.tools.find((t: { name: string }) => t.name === 'identify_comic');
+  expect(identify).toBeDefined();
+  expect(identify.inputSchema.properties.cover_year.type).toBe('integer');
 });
