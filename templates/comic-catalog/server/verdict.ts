@@ -49,7 +49,7 @@ function isDetail(issue: MetronIssue): issue is MetronIssueDetail {
   return 'reprints' in issue;
 }
 
-function normalizeTitle(title: string): string {
+export function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
     .replace(/^the\s+/, '')
@@ -95,16 +95,17 @@ function assess(clues: Clues, issue: MetronIssue, matchedBy: MatchInput['matched
     }
   }
 
-  const isbnMatches = clues.isbn !== undefined && !!detail?.isbn && clues.isbn === detail.isbn;
+  const metronIsbn = detail?.isbn.replace(/[\s-]/g, '');
+  const isbnMatches = clues.isbn !== undefined && !!metronIsbn && clues.isbn === metronIsbn;
   if (isbnMatches) evidence.push('ISBN matches');
-  else if (clues.isbn !== undefined && detail?.isbn) {
-    conflicts.push(`ISBN read as ${clues.isbn} but Metron has ${detail.isbn}`);
+  else if (clues.isbn !== undefined && metronIsbn) {
+    conflicts.push(`ISBN read as ${clues.isbn} but Metron has ${metronIsbn}`);
   }
 
   // Reprint series do not mark their covers, so an unmarked reprint candidate is only flagged, never a conflict.
   const printingConflict = (clues.printingKind === 'reprint' || clues.printingKind === 'facsimile') && !reprints;
   if (printingConflict) {
-    conflicts.push(`cover reads as ${clues.printingKind} but Metron lists this issue as an original`);
+    conflicts.push(`cover reads as ${clues.printingKind} but Metron does not list this issue as a reprint`);
   }
 
   return {

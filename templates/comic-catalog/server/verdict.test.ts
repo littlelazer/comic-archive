@@ -71,9 +71,16 @@ describe('evaluateCandidate', () => {
     expect(evaluateCandidate(trade, detail({ isbn: '9781302900540' }), 'trade_title').conflicts.join(' ')).toContain('ISBN');
   });
 
+  test('an ISBN Metron stores with hyphens or spaces still matches', () => {
+    const trade = clues({ format: 'trade', isbn: '9781302900533' });
+    const candidate = evaluateCandidate(trade, detail({ isbn: '978-1-302 90053-3' }), 'trade_title');
+    expect(candidate.evidence).toContain('ISBN matches');
+    expect(candidate.conflicts).toEqual([]);
+  });
+
   test('facsimile clue against a non-reprint candidate is a conflict', () => {
     const candidate = evaluateCandidate(clues({ printingKind: 'facsimile' }), detail(), 'series_number');
-    expect(candidate.conflicts.join(' ')).toContain('facsimile');
+    expect(candidate.conflicts).toEqual(['cover reads as facsimile but Metron does not list this issue as a reprint']);
   });
 
   test('a reprint candidate with no mark on the cover is a flag, not a conflict', () => {
