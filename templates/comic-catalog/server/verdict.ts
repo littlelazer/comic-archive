@@ -173,7 +173,9 @@ export function missingFromClues(clues: Clues): MissingHint[] {
 }
 
 // Verdict rules (see "Verdict rules" in the Phase 2 design spec):
-// - no_match: Metron returned nothing. Candidates and missing are empty.
+// - no_match: Metron returned nothing and counts nothing more. Candidates and missing are empty.
+// - With no issues returned but totalCount above zero, matches exist that were not inspected: ambiguous, with
+//   no candidates and the missing hints from the clues.
 // - ambiguous: Metron has more matches than were returned (totalCount > issues.length), or two or more
 //   candidates have no conflicting clue.
 // - confirmed: exactly one candidate has no conflicting clue, and either (a) the search matched a full modern
@@ -194,7 +196,11 @@ export function missingFromClues(clues: Clues): MissingHint[] {
 //   printing conflict or the top candidate has variantOrPrintingUndetermined.
 export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } {
   const { clues, issues, totalCount, matchedBy, confirmOnlyId } = input;
-  if (issues.length === 0) return { verdict: 'no_match', candidates: [], missing: [] };
+  if (issues.length === 0) {
+    return totalCount > 0
+      ? { verdict: 'ambiguous', candidates: [], missing: missingHints(clues, []) }
+      : { verdict: 'no_match', candidates: [], missing: [] };
+  }
 
   const ranked = issues
     .map((issue) => assess(clues, issue, matchedBy))

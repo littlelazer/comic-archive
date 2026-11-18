@@ -189,6 +189,11 @@ describe('decideVerdict', () => {
     expect(decideVerdict({ ...input, confirmOnlyId: 2 }).verdict).toBe('confirmed');
   });
 
+  test('is ambiguous, not no_match, when no issue was returned but Metron counts matches not inspected', () => {
+    const result = decideVerdict({ clues: clues({ seriesTitle: 'Batman', format: 'trade' }), issues: [], totalCount: 250, matchedBy: 'trade_title' });
+    expect(result).toEqual({ verdict: 'ambiguous', candidates: [], missing: ['issue_number', 'cover_date', 'isbn'] });
+  });
+
   test('is ambiguous when totalCount exceeds returned results', () => {
     const result = decideVerdict({ clues: clues(TITLE_NUMBER_YEAR), issues: [summary()], totalCount: 7, matchedBy: 'series_number' });
     expect(result.verdict).toBe('ambiguous');

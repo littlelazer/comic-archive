@@ -118,6 +118,18 @@ describe.skipIf(!process.env.HTTPS_PROXY)('identifyComic against real Metron', (
   );
 
   test(
+    'live: a common trade title is not no_match, within 4 requests',
+    async () => {
+      const { client: counted, counter } = countingClient(client);
+      const result = await identifyComic({ series_title: 'Batman', issue_number: '1', format: 'trade' }, counted);
+      expect(['probable', 'ambiguous']).toContain(result.verdict);
+      expect(result).toMatchObject({ searched: true });
+      expect(counter.requests).toBeLessThanOrEqual(4);
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  test(
     'live: same-title volumes with no year are ambiguous',
     async () => {
       const result = await identifyComic({ series_title: 'Thor', issue_number: '1', format: 'single_issue' }, client);

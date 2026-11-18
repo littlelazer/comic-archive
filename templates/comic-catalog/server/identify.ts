@@ -43,6 +43,10 @@ const TRADE_SERIES_TYPE = 'Trade Paperback';
 const BOUND_SERIES_TYPES = ['Hardcover', 'Omnibus'];
 // The spec's total wait per identify_comic call; once it has passed, no new Metron request starts.
 const CALL_WAIT_BUDGET_MS = 60_000;
+// The spec's target number of Metron requests per identify_comic call.
+const MAX_REQUESTS = 4;
+// Metron names trade series like "Batman TPB (2022)"; the suffix is dropped to compare them with a cover title.
+const TRADE_SUFFIX = /\s+(?:TPB|HC|Omnibus)(?:\s+\(\d{4}\))?$/i;
 
 class LookupFailed extends Error {
   constructor(readonly result: LookupFailure) {
@@ -161,6 +165,10 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
   );
 }
 
+export function tradeTitle(seriesName: string): string {
+  return seriesName.replace(TRADE_SUFFIX, '');
+}
+
 async function findTradeSeries(client: Lookup, title: string) {
   const name = searchTitle(title);
   const paperbacks = await searchSeries(client, { series_type: TRADE_SERIES_TYPE, name });
@@ -178,7 +186,7 @@ async function findTradeSeries(client: Lookup, title: string) {
 async function findTrade(clues: Clues, client: Lookup): Promise<Found | undefined> {
   if (!clues.seriesTitle) return undefined;
   const title = clues.seriesTitle;
-  const series = sameTitle(await findTradeSeries(client, title), title, (s) => s.series);
+  const series = sameTitle(await findTradeSeries(client, title), title, (s) => tradeTitle(s.series));
   if (series.length === 0) return undefined;
 
   // A trade's issue number is its volume number within the trade series.
@@ -189,11 +197,14 @@ async function findTrade(clues: Clues, client: Lookup): Promise<Found | undefine
   // Metron's issue search cannot filter by series type, so several trade series are found by title and kept.
   const tradeSeriesIds = new Set(series.map((s) => s.id));
   const page = await searchIssues(client, { series_name: searchTitle(title), ...number });
-  return found(
-    page,
-    'trade_title',
-    page.results.filter((issue) => tradeSeriesIds.has(issue.series.id)),
-  );
+  const tradeIssues = page.results.filter((issue) => tradeSeriesIds.has(issue.series.id));
+  if (tradeIssues.length === 0 && page.results.length < page.count) {
+    // A common title's first page can hold only single issues, so the first trade series is searched by id.
+    // The other trade series were not searched, so the title search's full count is kept: never no_match.
+    const firstSeries = await searchIssues(client, { series_id: String(series[0].id), ...number });
+    return { issues: firstSeries.results, totalCount: page.count, matchedBy: 'trade_title' };
+  }
+  return found(page, 'trade_title', tradeIssues);
 }
 
 // Re-judges with the leader replaced by its detail. Only the leader, whose barcode and reprint status were
@@ -205,10 +216,11 @@ export function judgeWithDetail(clues: Clues, match: Found, leader: MetronIssueD
 
 // Variants, reprints and printing marks are only on an issue's detail, so the leading candidate is judged on
 // its detail. A detail that is not found means the search result was stale; the leader is then judged as found.
-async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found) {
+// When the searches used the whole request budget the detail is skipped, so a trade then cannot confirm.
+async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found, detailAllowed: boolean) {
   const first = decideVerdict({ clues, ...match });
   const leaderId = first.candidates[0]?.metronId;
-  if (leaderId === undefined) return first;
+  if (leaderId === undefined || !detailAllowed) return first;
 
   const result = await client.getIssue(leaderId);
   if (!result.ok && result.reason === 'not_found') return first;
@@ -218,17 +230,18 @@ async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found)
 export async function identifyComic(raw: RawClues, client: MetronClient): Promise<IdentifyResult> {
   const clues = normalizeClues(raw);
   const budget = client.callBudget(CALL_WAIT_BUDGET_MS);
-  let searched = false;
+  let requests = 0;
   const lookup: Lookup = {
-    searchIssues: (params) => ((searched = true), client.searchIssues(params, budget)),
-    getIssue: (id) => client.getIssue(id, budget),
-    searchSeries: (params) => ((searched = true), client.searchSeries(params, budget)),
+    searchIssues: (params) => (requests++, client.searchIssues(params, budget)),
+    getIssue: (id) => (requests++, client.getIssue(id, budget)),
+    searchSeries: (params) => (requests++, client.searchSeries(params, budget)),
   };
   try {
     const match = clues.format === 'trade' ? await findTrade(clues, lookup) : await findSingleIssue(clues, lookup);
+    const searched = requests > 0;
     if (!match && !searched) return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched };
     if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched };
-    return { ...(await judgeWithLeaderDetail(clues, lookup, match)), searched };
+    return { ...(await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS)), searched };
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;

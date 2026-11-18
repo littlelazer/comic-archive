@@ -1,7 +1,7 @@
 // ABOUTME: Error-path tests for identifyComic against a local stand-in that answers only with Metron failures.
 // ABOUTME: Normal identification is tested against real Metron in identify.live.test.ts.
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import { identifyComic, judgeWithDetail, prefixHitStands } from './identify';
+import { identifyComic, judgeWithDetail, prefixHitStands, tradeTitle } from './identify';
 import { normalizeClues } from './clues';
 import { createMetronClient, type MetronIssueSummary } from './metron-client';
 
@@ -263,6 +263,90 @@ describe('what was searched', () => {
     const result = await identifyComic({ upc_main: '071486029663', issue_number: '1' }, client);
     expect(result).toMatchObject({ verdict: 'probable', searched: true });
     expect(result.candidates.map((c) => c.metronId)).toEqual([500, 13811]);
+    expect(requests.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('trade series names', () => {
+  test.each([
+    ['Batman TPB (2022)', 'Batman'],
+    ['Absolute Batman HC (2025)', 'Absolute Batman'],
+    ['X-Men omnibus (2019)', 'X-Men'],
+    ['Batman TPB', 'Batman'],
+    ['Batman', 'Batman'],
+    ['Hellboy HC Library Edition (2008)', 'Hellboy HC Library Edition (2008)'],
+  ])('%p is compared as %p', (name, title) => {
+    expect(tradeTitle(name)).toBe(title);
+  });
+});
+
+describe('trades across several series', () => {
+  const tradeSeries = (id: number, series: string, type = 'Trade Paperback') => ({
+    id,
+    series,
+    volume: 1,
+    year_began: 2022,
+    series_type: { id: 10, name: type },
+  });
+  const tradeIssue = (id: number, seriesId: number, name: string) => ({
+    ...summary(id, name),
+    series: { id: seriesId, name, volume: 1, year_began: 2022 },
+  });
+  // The title search's first page holds only single issues while Metron counts many more matches.
+  const singleIssues = [summary(1, 'Batman'), summary(2, 'Batman')];
+
+  function trades(paperbacks: unknown[], allSeries: unknown[], bySeriesId: unknown[]) {
+    return standInMetron((url) => {
+      if (url.pathname.endsWith('/series/')) return pageOf(url.searchParams.has('series_type') ? paperbacks : allSeries);
+      if (url.searchParams.has('series_name')) return pageOf(singleIssues, 250);
+      if (url.searchParams.has('series_id')) return pageOf(bySeriesId);
+      return new Response('', { status: 404 });
+    });
+  }
+
+  const BATMAN_TRADE = { series_title: 'Batman', issue_number: '1', format: 'trade' } as const;
+
+  test('an exact title narrows to its own trade series despite the TPB (year) suffix', async () => {
+    const { client, requests } = trades(
+      [tradeSeries(70, 'Batman TPB (2022)'), tradeSeries(71, 'Batman: Year One TPB (2005)')],
+      [],
+      [tradeIssue(700, 70, 'Batman TPB (2022)')],
+    );
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(requests.some((r) => r.includes('series_id=70'))).toBe(true);
+    expect(requests.some((r) => r.includes('series_name='))).toBe(false);
+    expect(result.candidates.map((c) => c.metronId)).toEqual([700]);
+  });
+
+  test('trade issues missing from an incomplete title page are searched by the first trade series', async () => {
+    const { client, requests } = trades(
+      [tradeSeries(70, 'Batman TPB (2022)'), tradeSeries(72, 'Batman TPB (2016)')],
+      [],
+      [tradeIssue(700, 70, 'Batman TPB (2022)')],
+    );
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(requests.some((r) => r.includes('series_id=70'))).toBe(true);
+    expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
+    expect(result.candidates.map((c) => c.metronId)).toEqual([700]);
+    expect(requests.length).toBeLessThanOrEqual(4);
+  });
+
+  test('when even the first trade series has no such issue the result is ambiguous, not no_match', async () => {
+    const { client } = trades([tradeSeries(70, 'Batman TPB (2022)'), tradeSeries(72, 'Batman TPB (2016)')], [], []);
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(result).toMatchObject({ verdict: 'ambiguous', candidates: [], searched: true });
+    expect(result.missing).toContain('isbn');
+  });
+
+  test('the hardcover path stays within 4 requests', async () => {
+    const { client, requests } = trades(
+      [],
+      [tradeSeries(80, 'Batman HC (2023)', 'Hardcover'), tradeSeries(81, 'Batman HC (2019)', 'Hardcover')],
+      [tradeIssue(800, 80, 'Batman HC (2023)')],
+    );
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
+    expect(result.candidates.map((c) => c.metronId)).toEqual([800]);
     expect(requests.length).toBeLessThanOrEqual(4);
   });
 });
