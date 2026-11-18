@@ -6,8 +6,8 @@ Boot path for development. Production (Linux Mac mini) is a later phase.
 
 - macOS with Homebrew and Docker Desktop running.
 - Node at or above the minimum in `setup/lib/node-version.sh` (22.23.4 on the 22 line). Setup installs `node@22` with Homebrew if the Node on `PATH` is older. If you manage Node with nvm, `nvm install 22` before setup works too.
-- pnpm comes from corepack (pinned in `package.json` `packageManager`). Bun is only needed to run the container test suite and the comic-catalog server tests.
-- Bun 1.4.4 at `~/.bun/bin/bun` (the comic-catalog server tests use it).
+- pnpm comes from corepack (pinned in `package.json` `packageManager`).
+- Bun 1.4.4 at `~/.bun/bin/bun`, needed only to run the container test suite and the comic-catalog server tests.
 
 ## 1. Install NanoClaw
 

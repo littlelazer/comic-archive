@@ -1,5 +1,5 @@
-// ABOUTME: Error-path tests for identifyComic against a local stand-in that answers only with Metron failures.
-// ABOUTME: Normal identification is tested against real Metron in identify.live.test.ts.
+// ABOUTME: Tests identifyComic's failures and search cascade against a local stand-in Metron, plus pure helpers.
+// ABOUTME: Stand-in pages only steer the cascade logic; real identifications are tested in identify.live.test.ts.
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { identifyComic, judgeWithDetail, prefixHitStands, tradeTitle } from './identify';
 import { normalizeClues } from './clues';
