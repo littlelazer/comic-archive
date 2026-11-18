@@ -106,4 +106,20 @@ describe('serveStdio', () => {
     expect(replies[0].error.code).toBe(-32700);
     expect(replies[1].result).toEqual({});
   });
+
+  test('answers a line that is not a JSON object with -32600 Invalid Request and keeps serving', async () => {
+    const encoder = new TextEncoder();
+    const input = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('null\n42\n' + JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }) + '\n'));
+        controller.close();
+      },
+    });
+    const lines: string[] = [];
+    await serveStdio([], { input, write: (line) => lines.push(line) });
+    const replies = lines.map((line) => JSON.parse(line));
+    expect(replies[0]).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } });
+    expect(replies[1]).toEqual(replies[0]);
+    expect(replies[2]).toEqual({ jsonrpc: '2.0', id: 9, result: {} });
+  });
 });

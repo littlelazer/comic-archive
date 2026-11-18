@@ -17,6 +17,7 @@ const SERVER_INFO = { name: 'comic-catalog', version: '0.2.0' };
 const DEFAULT_PROTOCOL_VERSION = '2024-11-05';
 
 const PARSE_ERROR = -32700;
+const INVALID_REQUEST = -32600;
 const METHOD_NOT_FOUND = -32601;
 
 interface JsonRpcRequest {
@@ -79,6 +80,11 @@ export async function serveStdio(tools: ToolDef[], io: StdioIo = defaultIo()): P
       request = JSON.parse(line);
     } catch {
       reply(null, { error: { code: PARSE_ERROR, message: 'Parse error' } });
+      return;
+    }
+    // Batches are not supported, so anything but a single request object is invalid.
+    if (typeof request !== 'object' || request === null || Array.isArray(request)) {
+      reply(null, { error: { code: INVALID_REQUEST, message: 'Invalid Request' } });
       return;
     }
     // A request without an id is a notification and gets no reply.
