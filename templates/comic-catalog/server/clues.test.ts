@@ -36,6 +36,13 @@ describe('normalizeClues text fields', () => {
     expect(normalizeClues({ format: 'trade' }).format).toBe('trade');
     expect(normalizeClues({ format: 'single_issue' }).format).toBe('single_issue');
   });
+
+  test('treats an unknown format with a legible ISBN as a trade', () => {
+    expect(normalizeClues({ isbn: '9781643375434' }).format).toBe('trade');
+    expect(normalizeClues({ format: 'unknown', isbn: '9781643375434' }).format).toBe('trade');
+    expect(normalizeClues({ format: 'single_issue', isbn: '9781643375434' }).format).toBe('single_issue');
+    expect(normalizeClues({ format: 'unknown', isbn: '978164337543' }).format).toBe('unknown');
+  });
 });
 
 describe('normalizeClues UPC', () => {

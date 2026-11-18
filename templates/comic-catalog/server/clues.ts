@@ -76,6 +76,8 @@ function coverYear(value: number | undefined): number | undefined {
 
 export function normalizeClues(raw: RawClues): Clues {
   const issueNumber = text(raw.issue_number);
+  const isbn = isbn13(raw.isbn);
+  const format = raw.format ?? 'unknown';
   return {
     seriesTitle: text(raw.series_title),
     issueNumber: issueNumber && text(normalizeIssueNumber(issueNumber)),
@@ -84,8 +86,9 @@ export function normalizeClues(raw: RawClues): Clues {
     coverYear: coverYear(raw.cover_year),
     upcMain: digitsOnly(raw.upc_main, 12),
     upcAddon: digitsOnly(raw.upc_addon, [2, 5]),
-    isbn: isbn13(raw.isbn),
-    format: raw.format ?? 'unknown',
+    isbn,
+    // Single issues carry no ISBN, so a legible one on a cover of unknown format marks a trade.
+    format: format === 'unknown' && isbn !== undefined ? 'trade' : format,
     printingKind: printingKind(raw.printing),
   };
 }
