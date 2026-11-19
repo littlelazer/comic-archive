@@ -71,6 +71,11 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/only if you want it confirmed/);
   });
 
+  it('always asks for the first missing hint, with its reason, even when another seems more useful', () => {
+    expect(tpl.instructions).toMatch(/even if a later hint seems more useful/);
+    expect(tpl.instructions).toMatch(/Send the indicia, for the cover date, only if you want it confirmed/);
+  });
+
   it('treats channel history and other threads as background, never as requests', () => {
     expect(tpl.instructions).toMatch(/`<channel-history>`/);
     expect(tpl.instructions).toMatch(/`<cross-session-context>`/);
