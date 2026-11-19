@@ -1,6 +1,7 @@
-// ABOUTME: MCP tool definitions for the comic catalog: identify_comic and get_comic.
+// ABOUTME: MCP tool definitions for the comic catalog: identify_comic, confirm_choice and get_comic.
 // ABOUTME: Lookup failures are returned as result objects so the agent can decide how to report them.
 import type { RawClues } from './clues';
+import { confirmChoice } from './confirm';
 import { identifyComic } from './identify';
 import type { MetronClient } from './metron-client';
 import type { ToolDef } from './mcp-stdio';
@@ -80,12 +81,47 @@ export function parseClues(args: unknown): RawClues {
   return clues as RawClues;
 }
 
-export function identifyComicTool(client: MetronClient): ToolDef {
+export function identifyComicTool(client: MetronClient, coversDir?: string): ToolDef {
   return {
     name: 'identify_comic',
     description:
       'Identify a comic from the clues read off its cover photos and return a verdict (confirmed, probable, ambiguous, no_match or lookup_failed) with candidates, evidence, hints for which extra photo would help, and searched (false when the clues were too thin to search Metron at all). Call it once per comic, after reading every photo of that comic. When the user asks to retry, call it again with the same clues. A failed lookup returns verdict lookup_failed with reason, retryable and retryAfterSeconds.',
     inputSchema: { type: 'object', properties: CLUE_PROPERTIES, additionalProperties: false },
-    handler: async (args) => identifyComic(parseClues(args), client),
+    handler: async (args) => identifyComic(parseClues(args), client, coversDir),
+  };
+}
+
+export function confirmChoiceTool(client: MetronClient, coversDir?: string): ToolDef {
+  return {
+    name: 'confirm_choice',
+    description:
+      "Settle a comic the user chose by tapping a button or replying with a number or name. Call it only with a metron_id and/or cover_label the user actually chose, never with a choice the user didn't make. Pass the clues already read from the photos. For a cover choice, pass the settled issue's metron_id with the tapped cover_label. Returns the same verdict shape as identify_comic.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        metron_id: { type: 'integer', description: 'Metron issue id the user chose' },
+        cover_label: { type: 'string', description: 'Cover label the user chose, exactly as offered' },
+        ...CLUE_PROPERTIES,
+      },
+      required: ['metron_id'],
+      additionalProperties: false,
+    },
+    handler: async (args) => {
+      if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+        throw new Error('arguments must be an object');
+      }
+      const { metron_id: metronId, cover_label: coverLabel, ...clues } = args as Record<string, unknown>;
+      if (typeof metronId !== 'number' || !Number.isInteger(metronId) || metronId <= 0) {
+        throw new Error('metron_id must be a positive integer');
+      }
+      if (coverLabel !== undefined && coverLabel !== null && typeof coverLabel !== 'string') {
+        throw new Error('cover_label must be a string');
+      }
+      return confirmChoice(
+        { metronId, coverLabel: coverLabel ?? undefined, clues: parseClues(clues) },
+        client,
+        coversDir,
+      );
+    },
   };
 }

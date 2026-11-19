@@ -1,8 +1,8 @@
-// ABOUTME: Unit tests for the get_comic and identify_comic tools using a stand-in Metron client.
+// ABOUTME: Unit tests for the get_comic, identify_comic and confirm_choice tools using a stand-in Metron client.
 // ABOUTME: Covers argument validation, clue parsing and passing failure results through without isError.
 import { describe, expect, test } from 'bun:test';
 import type { MetronClient } from './metron-client';
-import { getComicTool, identifyComicTool, parseClues } from './tools';
+import { confirmChoiceTool, getComicTool, identifyComicTool, parseClues } from './tools';
 
 const failure = { ok: false, reason: 'not_found', retryable: false } as const;
 const client = {
@@ -88,5 +88,50 @@ describe('identifyComicTool', () => {
     expect(parseClues({ series_title: 'The Thing', cover_year: null, upc_addon: null })).toEqual({ series_title: 'The Thing' });
     const result = await tool.handler({ series_title: 'The Thing', issue_number: null });
     expect(result).toMatchObject({ verdict: 'lookup_failed', reason: 'rate_limited' });
+  });
+});
+
+describe('confirmChoiceTool', () => {
+  const tool = confirmChoiceTool({
+    getIssue: async () => ({ ok: false, reason: 'not_found', retryable: false }),
+  } as unknown as MetronClient);
+
+  test('schema takes metron_id, cover_label and every clue, none additional', () => {
+    const schema = tool.inputSchema as { properties: object; required?: string[]; additionalProperties: boolean };
+    expect(tool.name).toBe('confirm_choice');
+    expect(Object.keys(schema.properties).sort()).toEqual(
+      ['cover_label', 'cover_month', 'cover_year', 'edition', 'format', 'isbn', 'issue_number', 'metron_id', 'price', 'printing', 'publisher', 'series_title', 'upc_addon', 'upc_main', 'variant_marking'],
+    );
+    expect(schema.required).toEqual(['metron_id']);
+    expect(schema.additionalProperties).toBe(false);
+  });
+
+  test('description says to call it only with a choice the user made', () => {
+    expect(tool.description).toMatch(/tapp/i);
+    expect(tool.description).toMatch(/never .*user didn't make/i);
+    expect(tool.description).toMatch(/metron_id/);
+    expect(tool.description).toMatch(/cover_label/);
+  });
+
+  test('confirm_choice requires a positive integer metron_id', async () => {
+    await expect(tool.handler({})).rejects.toThrow('metron_id must be a positive integer');
+    await expect(tool.handler({ metron_id: 0 })).rejects.toThrow('metron_id must be a positive integer');
+    await expect(tool.handler({ metron_id: 1.5 })).rejects.toThrow('metron_id must be a positive integer');
+    await expect(tool.handler({ metron_id: '7' })).rejects.toThrow('metron_id must be a positive integer');
+  });
+
+  test('confirm_choice rejects unknown properties', async () => {
+    await expect(tool.handler({ metron_id: 1, colour: 'red' })).rejects.toThrow(/colour/);
+  });
+
+  test('rejects a non-string cover_label', async () => {
+    await expect(tool.handler({ metron_id: 1, cover_label: 3 })).rejects.toThrow(/cover_label/);
+  });
+
+  test('confirm_choice passes clues through parseClues', async () => {
+    await expect(tool.handler({ metron_id: 1, cover_year: 1983.5 })).rejects.toThrow(/cover_year/);
+    await expect(tool.handler({ metron_id: 1, format: 'omnibus' })).rejects.toThrow(/format/);
+    const result = await tool.handler({ metron_id: 1, cover_label: null, series_title: 'The Thing', issue_number: null });
+    expect(result).toMatchObject({ verdict: 'no_match' });
   });
 });
