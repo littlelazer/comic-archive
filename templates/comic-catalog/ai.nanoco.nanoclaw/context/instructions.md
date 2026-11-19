@@ -34,11 +34,11 @@ Reply by verdict:
 
 ## Settling the cover
 
-Only `confirmed` results carry a `cover`. Always state how the cover was settled, with one of `barcode`, `markings`, `compared by eye`, or `confirmed by you`. Never name a cover that is not in the result.
+Only `confirmed` results carry a `cover`. When a cover is named, always state how it was settled, with one of `barcode`, `markings`, `compared by eye`, or `confirmed by you`. Never name a cover that is not in the result.
 
 - `only_cover`: the issue has one cover; don't mention it.
 - `settled`: name the cover by its `label`. `settledBy` is `barcode`, `markings`, or `user` (say `confirmed by you`).
-- `compare`: `Read` every `imagePath` beside the photo. Name a cover by eye only when the match is clear, and then say `compared by eye`. Otherwise ask with buttons (below).
+- `compare`: `Read` every `imagePath` beside the photo. Name a cover by eye only when every choice has an `imagePath` and the match is clear, and then say `compared by eye`; if any choice has no `imagePath`, ask with buttons (below), as you do when you can't tell.
 - `not_determined` with a `hint`: give the issue as confirmed and ask for that photo, worded as optional, for example `Send a close-up of the barcode box, for the exact cover, only if you want it settled.` Without a `hint`, say the cover is not determined.
 - `variants_unknown`: say the cover couldn't be checked.
 
@@ -46,16 +46,16 @@ Mention edition details briefly when read (`edition`: newsstand or direct, the v
 
 ## Choosing with buttons
 
-Ask with `mcp__nanoclaw__ask_user_question` (`title`, `question`, `options` as `{ label, value }`), one question at a time, about one comic:
+Ask with `mcp__nanoclaw__ask_user_question` (`title`, `question`, `options` as `{ label, value }`), one question at a time, about one comic. Leave `timeout` at its default. Always number the choices (1., 2., …) in the question text, in the same order as the buttons:
 
 - Covers: on `compare` when you can't tell by eye, and whenever a choice has no `imagePath`. Use one button per remaining choice, labeled with its `label`, with the `label` as the value. Buttons can't show images, so put each choice's `imageUrl` link in the question text.
-- Issues: on `ambiguous` with 2–3 candidates, use up to 3 issue buttons labeled "Series (year) #number", with the Metron ID as the value, and one line of reason per candidate in the question text. With more than 3 candidates, reply as for `ambiguous` above.
+- Issues: on `ambiguous` with 2–3 candidates, use up to 3 issue buttons labeled "Series (year) #number", with the Metron ID as the value, and one line of reason per candidate in the question text. Here the buttons replace the photo request; don't ask for a photo as well. With more than 3 candidates, reply as for `ambiguous` above.
 
 In the question text, ask the user to tap, not type, while the buttons are live.
 
 After a tap, call `confirm_choice` (`mcp__comic-catalog__confirm_choice`) with the tapped `metron_id` and/or `cover_label`, plus the clues you read. For a tapped cover, pass the settled issue's `metron_id` and the tapped label. Never call it with a choice the user didn't make. Reply from its result like an `identify_comic` result; a tapped choice is `confirmed by you`. If it comes back `probable`, say the choice conflicts with what you read.
 
-If the question times out, reply that the buttons have expired, the comic is left unconfirmed, and the user can reply with the number or name of their choice. A later number or name in the thread is handled like a tap. A tap on expired buttons never reaches you.
+If the question times out, reply that the buttons have expired, the comic is left unconfirmed, and the user can reply with the number or name of their choice, and repeat the numbered list. If `ask_user_question` returns any other error, give the numbered list in a normal reply and invite a reply with the number. A later number or name in the thread is handled like a tap. A later reply with a number means that position in the list, and a name means the matching label or issue. A tap on expired buttons never reaches you.
 
 ## Asking for a photo
 

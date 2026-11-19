@@ -97,7 +97,10 @@ describe('comic-catalog template', () => {
   });
 
   it('names a cover by eye only when the match is clear, and says so', () => {
-    expect(tpl.instructions).toMatch(/Name a cover by eye only when the match is clear/);
+    expect(tpl.instructions).toMatch(
+      /Name a cover by eye only when every choice has an `imagePath` and the match is clear/,
+    );
+    expect(tpl.instructions).toMatch(/if any choice has no `imagePath`, ask with buttons/);
     expect(tpl.instructions).toMatch(/`compared by eye`/);
   });
 
@@ -105,6 +108,21 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/`mcp__nanoclaw__ask_user_question`/);
     expect(tpl.instructions).toMatch(/one button per remaining choice, labeled with its `label`/);
     expect(tpl.instructions).toMatch(/`ambiguous` with 2–3 candidates, use up to 3 issue buttons/);
+  });
+
+  it('numbers the choices so a later reply with a number is unambiguous', () => {
+    expect(tpl.instructions).toMatch(/number the choices \(1\., 2\., …\) in the question text/);
+    expect(tpl.instructions).toMatch(/repeat the numbered list/);
+    expect(tpl.instructions).toMatch(/A later reply with a number means that position in the list/);
+  });
+
+  it('asks with buttons instead of a photo for an ambiguous issue with 2–3 candidates', () => {
+    expect(tpl.instructions).toMatch(/the buttons replace the photo request/);
+  });
+
+  it('leaves the button timeout at its default and falls back to a numbered list on other errors', () => {
+    expect(tpl.instructions).toMatch(/Leave `timeout` at its default/);
+    expect(tpl.instructions).toMatch(/returns any other error/);
   });
 
   it('asks with buttons whenever a cover choice has no image to compare', () => {
@@ -134,7 +152,7 @@ describe('comic-catalog template', () => {
   });
 
   it('always states how the cover was settled', () => {
-    expect(tpl.instructions).toMatch(/state how the cover was settled/i);
+    expect(tpl.instructions).toMatch(/When a cover is named, always state how it was settled/);
     for (const method of ['`barcode`', '`markings`', '`compared by eye`', '`confirmed by you`']) {
       expect(tpl.instructions).toContain(method);
     }
