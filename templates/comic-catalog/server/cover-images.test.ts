@@ -1,7 +1,7 @@
 // ABOUTME: Tests for downloading cover images to disk, against a local stand-in image server.
 // ABOUTME: Covers writing, reuse of existing files, failed downloads and choices without an image.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fetchCoverImages } from './cover-images';
@@ -52,19 +52,19 @@ describe('fetchCoverImages', () => {
       client.getImage,
       covers,
     );
-    expect(result.map((c) => c.imagePath)).toEqual([join(covers, 'a1.jpg'), join(covers, 'b2.jpg')]);
-    expect(new Uint8Array(await readFile(join(covers, 'a1.jpg')))).toEqual(jpeg);
-    expect(new Uint8Array(await readFile(join(covers, 'b2.jpg')))).toEqual(jpeg);
+    expect(result.map((c) => c.imagePath)).toEqual([join(covers, 'media_a1.jpg'), join(covers, 'media_b2.jpg')]);
+    expect(new Uint8Array(await readFile(join(covers, 'media_a1.jpg')))).toEqual(jpeg);
+    expect(new Uint8Array(await readFile(join(covers, 'media_b2.jpg')))).toEqual(jpeg);
   });
 
   test('reuses an existing file without a request', async () => {
     const { base, requests } = imageServer();
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'a1.jpg'), 'cached');
+    await writeFile(join(dir, 'media_a1.jpg'), 'cached');
     const result = await fetchCoverImages([choice('Main cover', `${base}/media/a1.jpg`)], client.getImage, dir);
-    expect(result[0].imagePath).toBe(join(dir, 'a1.jpg'));
+    expect(result[0].imagePath).toBe(join(dir, 'media_a1.jpg'));
     expect(requests).toEqual([]);
-    expect(await readFile(join(dir, 'a1.jpg'), 'utf8')).toBe('cached');
+    expect(await readFile(join(dir, 'media_a1.jpg'), 'utf8')).toBe('cached');
   });
 
   test('a failed download leaves that choice without imagePath and still fetches the rest', async () => {
@@ -82,8 +82,8 @@ describe('fetchCoverImages', () => {
       client.getImage,
       dir,
     );
-    expect(result.map((c) => c.imagePath)).toEqual([join(dir, 'a1.jpg'), undefined, join(dir, 'c3.jpg')]);
-    expect(await Bun.file(join(dir, 'bad.jpg')).exists()).toBe(false);
+    expect(result.map((c) => c.imagePath)).toEqual([join(dir, 'media_a1.jpg'), undefined, join(dir, 'media_c3.jpg')]);
+    expect(await Bun.file(join(dir, 'media_bad.jpg')).exists()).toBe(false);
   });
 
   test('a choice with no imageUrl is skipped', async () => {
@@ -107,5 +107,27 @@ describe('fetchCoverImages', () => {
     const input = [choice('Main cover', `${base}/media/a1.jpg`)];
     await fetchCoverImages(input, client.getImage, dir);
     expect(input[0].imagePath).toBeUndefined();
+  });
+
+  test('same basename in different folders gets separate files', async () => {
+    const { base } = imageServer(
+      (path) =>
+        new Response(path.includes('/x/') ? 'x-image' : 'y-image', { headers: { 'Content-Type': 'image/jpeg' } }),
+    );
+    const result = await fetchCoverImages(
+      [choice('One', `${base}/x/cover.jpg`), choice('Two', `${base}/y/cover.jpg`)],
+      client.getImage,
+      dir,
+    );
+    expect(result[0].imagePath).not.toBe(result[1].imagePath);
+    expect(await readFile(result[0].imagePath!, 'utf8')).toBe('x-image');
+    expect(await readFile(result[1].imagePath!, 'utf8')).toBe('y-image');
+  });
+
+  test('sanitizes the cached filename and leaves no temp files behind', async () => {
+    const { base } = imageServer();
+    const result = await fetchCoverImages([choice('Odd', `${base}/m/a%20b/c$d.jpg`)], client.getImage, dir);
+    expect(result[0].imagePath).toMatch(/^[^]*\/m_a_20b_c_d\.jpg$/);
+    expect(await readdir(dir)).toEqual(['m_a_20b_c_d.jpg']);
   });
 });

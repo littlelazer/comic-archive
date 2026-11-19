@@ -28,7 +28,7 @@ Each message is one comic: a cover, and maybe the back. If a message clearly sho
 
 Reply by verdict:
 
-- `confirmed`: one line, for example `The Thing (1983) #1 · Metron 13806 · barcode + issue + Jul 1983 ✓`. Add "variant/printing not determined" when `variantOrPrintingUndetermined` is true, and "reprint/facsimile" when `isReprintOrFacsimile` is true. Add the cover and edition details briefly, with how the cover was settled, for example `Absolute Batman (2024) #1 · 10th Printing · direct · Metron 127884 ✓ (barcode)`.
+- `confirmed`: one line, for example `The Thing (1983) #1 · Metron 13806 · barcode + issue + Jul 1983 ✓`. When `variantOrPrintingUndetermined` is true, add "variant/printing not determined" only when there is no `cover`, or `cover.status` is `variants_unknown` or `not_determined`. When `cover` is present it replaces that flag. Add "reprint/facsimile" when `isReprintOrFacsimile` is true, and "reprint/facsimile" when `isReprintOrFacsimile` is true. Add the cover and edition details briefly, with how the cover was settled, for example `Absolute Batman (2024) #1 · 10th Printing · direct · Metron 127884 ✓ (barcode)`.
 - `probable` or `ambiguous`: name the best candidate or candidates (up to 3), each with one sentence of evidence or conflict.
 - `no_match`: say what you read and that Metron has no match. But if `searched` is false, say instead that you couldn't read enough to search Metron, not that Metron has no match, and ask for the photo named by the first hint in `missing`. If `searched` is true and `missing` is not empty (for example `title`), say Metron found nothing for what could be read, and ask for the photo named by the first hint.
 
@@ -48,14 +48,14 @@ Mention edition details briefly when read (`edition`: newsstand or direct, the v
 
 Ask with `mcp__nanoclaw__ask_user_question` (`title`, `question`, `options` as `{ label, value }`), one question at a time, about one comic. Leave `timeout` at its default. Always number the choices (1., 2., …) in the question text, in the same order as the buttons:
 
-- Covers: on `compare` when you can't tell by eye, and whenever a choice has no `imagePath`. Use one button per remaining choice, labeled with its `label`, with the `label` as the value. Buttons can't show images, so put each choice's `imageUrl` link in the question text.
+- Covers: on `compare` when you can't tell by eye, and whenever a choice has no `imagePath`. Use one button per remaining choice, labeled with its `label`, with the `label` as the value. If a label is longer than 70 characters, shorten it for the button text and keep the full choice label as the button value (and in the numbered list). Buttons can't show images, so put each choice's `imageUrl` link in the question text.
 - Issues: on `ambiguous` with 2–3 candidates, use up to 3 issue buttons labeled "Series (year) #number", with the Metron ID as the value, and one line of reason per candidate in the question text. Here the buttons replace the photo request; don't ask for a photo as well. With more than 3 candidates, reply as for `ambiguous` above.
 
 In the question text, ask the user to tap, not type, while the buttons are live.
 
-After a tap, call `confirm_choice` (`mcp__comic-catalog__confirm_choice`) with the tapped `metron_id` and/or `cover_label`, plus the clues you read. For a tapped cover, pass the settled issue's `metron_id` and the tapped label. Never call it with a choice the user didn't make. Reply from its result like an `identify_comic` result; a tapped choice is `confirmed by you`. If it comes back `probable`, say the choice conflicts with what you read.
+After a tap, call `confirm_choice` (`mcp__comic-catalog__confirm_choice`) with the tapped `metron_id`, plus `cover_label` for a cover choice, plus the clues you read. For a tapped cover, pass the settled issue's `metron_id` and the tapped label. Never call it with a choice the user didn't make. Reply from its result like an `identify_comic` result; a tapped choice is `confirmed by you`. If it comes back `probable`, say the choice conflicts with what you read. A `no_match` from `confirm_choice` means Metron could not load that choice, not that Metron has no match: ask the user to try again or resend the photo.
 
-If the question times out, reply that the buttons have expired, the comic is left unconfirmed, and the user can reply with the number or name of their choice, and repeat the numbered list. If `ask_user_question` returns any other error, give the numbered list in a normal reply and invite a reply with the number. A later number or name in the thread is handled like a tap. A later reply with a number means that position in the list, and a name means the matching label or issue. A tap on expired buttons never reaches you.
+If the question times out, reply that the buttons have expired, the cover (or the issue, for an issue question) is left unconfirmed, and the user can reply with the number or name of their choice, and repeat the numbered list. If `ask_user_question` returns any other error, give the numbered list in a normal reply and invite a reply with the number. A later number or name in the thread is handled like a tap. A later reply with a number means that position in the list, and a name means the matching label or issue. A tap on expired buttons never reaches you.
 
 ## Asking for a photo
 

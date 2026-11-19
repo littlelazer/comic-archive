@@ -112,4 +112,21 @@ describe('confirmChoice', () => {
       retryable: false,
     });
   });
+
+  test('echoes the edition read from the clues on a confirmed result', async () => {
+    const result = await confirmChoice(
+      { metronId: 7, coverLabel: 'Newsstand', clues: { ...CLUES, edition: 'newsstand' } },
+      detailClient([variant('Newsstand'), variant('Direct')]),
+    );
+    expect(result).toMatchObject({ verdict: 'confirmed', edition: { edition: 'newsstand' } });
+  });
+
+  test('echoes the edition on a probable result and omits it when nothing was read', async () => {
+    const probable = await confirmChoice(
+      { metronId: 7, clues: { ...CLUES, edition: 'direct' } },
+      detailClient([], '9'),
+    );
+    expect(probable).toMatchObject({ verdict: 'probable', edition: { edition: 'direct' } });
+    expect(await confirmChoice({ metronId: 7, clues: CLUES }, detailClient([]))).not.toHaveProperty('edition');
+  });
 });

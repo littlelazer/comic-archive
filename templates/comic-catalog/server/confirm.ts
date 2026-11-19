@@ -3,7 +3,7 @@
 import { normalizeClues, type Clues, type RawClues } from './clues';
 import { coverChoices, type CoverResult } from './cover';
 import { resolveCover } from './cover-images';
-import { LookupFailed, unwrap, type IdentifyResult } from './identify';
+import { editionEcho, LookupFailed, unwrap, type IdentifyResult } from './identify';
 import type { MetronClient, MetronIssueDetail } from './metron-client';
 import { evaluateCandidate } from './verdict';
 
@@ -19,6 +19,8 @@ export async function confirmChoice(
   coversDir?: string,
 ): Promise<IdentifyResult> {
   const clues = normalizeClues(input.clues);
+  const edition = editionEcho(input.clues, clues);
+  const echoed = edition ? { edition } : {};
   try {
     const found = await client.getIssue(input.metronId);
     if (!found.ok && found.reason === 'not_found') {
@@ -27,10 +29,18 @@ export async function confirmChoice(
     const detail = unwrap(found, { issue: input.metronId });
     const candidate = evaluateCandidate(clues, detail, 'series_number');
     if (candidate.conflicts.length > 0) {
-      return { verdict: 'probable', candidates: [candidate], missing: [], searched: true };
+      return { verdict: 'probable', candidates: [candidate], missing: [], searched: true, ...echoed };
     }
     const cover = await coverFor(input.coverLabel, clues, detail, client, coversDir);
-    return { verdict: 'confirmed', candidates: [candidate], missing: [], searched: true, cover, chosenBy: 'user' };
+    return {
+      verdict: 'confirmed',
+      candidates: [candidate],
+      missing: [],
+      searched: true,
+      cover,
+      chosenBy: 'user',
+      ...echoed,
+    };
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;

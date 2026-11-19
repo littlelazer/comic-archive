@@ -95,7 +95,7 @@ export function confirmChoiceTool(client: MetronClient, coversDir?: string): Too
   return {
     name: 'confirm_choice',
     description:
-      "Settle a comic the user chose by tapping a button or replying with a number or name. Call it only with a metron_id and/or cover_label the user actually chose, never with a choice the user didn't make. Pass the clues already read from the photos. For a cover choice, pass the settled issue's metron_id with the tapped cover_label. Returns the same verdict shape as identify_comic.",
+      "Settle a comic the user chose by tapping a button or replying with a number or name. Call it only with the metron_id (and, for a cover choice, the cover_label) the user actually chose, never with a choice the user didn't make. Pass the clues already read from the photos. For a cover choice, pass the settled issue's metron_id with the tapped cover_label. Returns the same verdict shape as identify_comic.",
     inputSchema: {
       type: 'object',
       properties: {

@@ -1,14 +1,17 @@
 // ABOUTME: Settles an issue's cover and downloads the images of cover choices so the agent can compare them by eye.
-// ABOUTME: Files are named by the image URL's basename and reused when already present.
-import { mkdir, writeFile } from 'node:fs/promises';
+// ABOUTME: Files are named by the image URL's path and reused when already present.
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Clues } from './clues';
 import { settleCover, type CoverChoice, type CoverResult } from './cover';
 import type { MetronClient, MetronIssueDetail } from './metron-client';
 
-function basenameOf(imageUrl: string): string {
+// The whole pathname, so equal basenames in different Metron folders stay apart.
+function cacheNameOf(imageUrl: string): string {
   try {
-    return new URL(imageUrl).pathname.split('/').pop() ?? '';
+    const pathname = new URL(imageUrl).pathname;
+    if (pathname.endsWith('/')) return '';
+    return pathname.replace(/^\/+/, '').replace(/[^A-Za-z0-9._-]/g, '_');
   } catch {
     return '';
   }
@@ -47,15 +50,18 @@ async function withImagePath(
   dir: string,
 ): Promise<CoverChoice> {
   if (!choice.imageUrl) return choice;
-  const basename = basenameOf(choice.imageUrl);
-  if (!basename) return choice;
-  const path = join(dir, basename);
+  const name = cacheNameOf(choice.imageUrl);
+  if (!name) return choice;
+  const path = join(dir, name);
   try {
     if (await Bun.file(path).exists()) return { ...choice, imagePath: path };
     const image = await getImage(choice.imageUrl);
     if (!image.ok) return choice;
     await mkdir(dir, { recursive: true });
-    await writeFile(path, image.data);
+    // Written aside and renamed so an interrupted write never leaves a truncated cached file.
+    const partial = `${path}.${process.pid}.part`;
+    await writeFile(partial, image.data);
+    await rename(partial, path);
     return { ...choice, imagePath: path };
   } catch {
     return choice;

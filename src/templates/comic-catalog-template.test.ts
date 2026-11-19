@@ -131,7 +131,7 @@ describe('comic-catalog template', () => {
 
   it('settles a tap with confirm_choice and never with a choice the user did not make', () => {
     expect(tpl.instructions).toMatch(/After a tap, call `confirm_choice`/);
-    expect(tpl.instructions).toMatch(/the tapped `metron_id` and\/or `cover_label`/);
+    expect(tpl.instructions).toMatch(/the tapped `metron_id`, plus `cover_label` for a cover choice/);
     expect(tpl.instructions).toMatch(/Never call it with a choice the user didn't make/);
     expect(tpl.instructions).toMatch(/`confirmed by you`/);
   });
@@ -169,5 +169,26 @@ describe('comic-catalog template', () => {
   it('gives the add-on reason and asks for a readable title', () => {
     expect(tpl.instructions).toMatch(/the add-on digits pin down the exact issue and cover/);
     expect(tpl.instructions).toMatch(/`title`: a photo where the series title is readable/);
+  });
+
+  it('drops the variant flag when a cover settles it', () => {
+    expect(tpl.instructions).toMatch(/When `cover` is present it replaces that flag/);
+    expect(tpl.instructions).toMatch(
+      /only when there is no `cover`, or `cover.status` is `variants_unknown` or `not_determined`/,
+    );
+  });
+
+  it('leaves the cover unconfirmed when a cover question times out', () => {
+    expect(tpl.instructions).toMatch(/the cover \(or the issue, for an issue question\) is left unconfirmed/);
+  });
+
+  it('says a confirm_choice no_match means Metron could not load the choice', () => {
+    expect(tpl.instructions).toMatch(/`no_match` from `confirm_choice` means Metron could not load that choice/);
+    expect(tpl.instructions).toMatch(/try again or resend the photo/);
+  });
+
+  it('shortens button labels over 70 characters but keeps the full label as the value', () => {
+    expect(tpl.instructions).toMatch(/longer than 70 characters/);
+    expect(tpl.instructions).toMatch(/full choice label as the button value/);
   });
 });

@@ -13,7 +13,7 @@ export interface StdioIo {
   write: (line: string) => void;
 }
 
-const SERVER_INFO = { name: 'comic-catalog', version: '0.2.0' };
+const SERVER_INFO = { name: 'comic-catalog', version: '0.3.0' };
 const DEFAULT_PROTOCOL_VERSION = '2024-11-05';
 
 const PARSE_ERROR = -32700;

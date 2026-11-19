@@ -258,7 +258,7 @@ async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found,
   return { judged: judgeWithDetail(clues, match, detail), detail, stale: false };
 }
 
-function editionEcho(raw: RawClues, clues: Clues): EditionEcho | undefined {
+export function editionEcho(raw: RawClues, clues: Clues): EditionEcho | undefined {
   const printing = raw.printing?.trim();
   const echo: EditionEcho = {
     ...(clues.edition && { edition: clues.edition }),
