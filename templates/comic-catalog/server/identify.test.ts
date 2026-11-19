@@ -4,7 +4,7 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { identifyComic, judgeWithDetail, prefixHitStands, tradeTitle } from './identify';
+import { fetchDetail, identifyComic, judgeWithDetail, prefixHitStands, tradeTitle } from './identify';
 import { normalizeClues } from './clues';
 import { createMetronClient, type MetronIssueSummary } from './metron-client';
 
@@ -300,7 +300,8 @@ describe('trades across several series', () => {
 
   function trades(paperbacks: unknown[], allSeries: unknown[], bySeriesId: unknown[]) {
     return standInMetron((url) => {
-      if (url.pathname.endsWith('/series/')) return pageOf(url.searchParams.has('series_type') ? paperbacks : allSeries);
+      if (url.pathname.endsWith('/series/'))
+        return pageOf(url.searchParams.has('series_type') ? paperbacks : allSeries);
       if (url.searchParams.has('series_name')) return pageOf(singleIssues, 250);
       if (url.searchParams.has('series_id')) return pageOf(bySeriesId);
       return new Response('', { status: 404 });
@@ -389,9 +390,11 @@ describe('covers in identify results', () => {
   });
 
   test('a probable verdict has no cover', async () => {
-    const { client } = withDetail(detailOf(7, [variant('Newsstand', '')]), [summary(7, 'The Thing'), summary(8, 'The Thing')]);
+    // The only hit is issue #2 while the cover says #1, so the number conflicts and nothing can confirm.
+    const hit = { ...summary(7, 'The Thing'), number: '2' };
+    const { client } = withDetail({ ...detailOf(7, [variant('Newsstand', '')]), number: '2' }, [hit]);
     const result = await identifyComic(READ, client);
-    expect(result.verdict).not.toBe('confirmed');
+    expect(result.verdict).toBe('probable');
     expect(result).not.toHaveProperty('cover');
   });
 
@@ -440,5 +443,23 @@ describe('covers in identify results', () => {
   test('no edition field is returned when none of the clues were read', async () => {
     const { client } = withDetail(detailOf(7, []));
     expect(await identifyComic(READ, client)).not.toHaveProperty('edition');
+  });
+
+  test('the cover fetch for a leader whose detail was skipped fetches and settles the detail', async () => {
+    const { client } = withDetail(detailOf(7, [variant('Newsstand', '')]));
+    expect(await fetchDetail(client, 7, client.callBudget(60_000))).toMatchObject({ id: 7 });
+  });
+
+  test('the cover fetch keeps to the call wait budget, so a spent budget fails fast without waiting', async () => {
+    const { client, sleeps } = clientFor(() => new Response('', { status: 429, headers: { 'Retry-After': '25' } }));
+    expect(await fetchDetail(client, 7, client.callBudget(0))).toBeUndefined();
+    expect(sleeps).toEqual([]);
+  });
+
+  test('a leader detail that was not found is not fetched again for the cover', async () => {
+    const { client, requests } = withDetail(undefined);
+    const result = await identifyComic(READ, client);
+    expect(result).toMatchObject({ verdict: 'confirmed', cover: { status: 'variants_unknown' } });
+    expect(requests.filter((r) => r.startsWith('issue/7/'))).toHaveLength(1);
   });
 });

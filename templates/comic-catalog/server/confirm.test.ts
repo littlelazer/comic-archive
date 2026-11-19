@@ -2,6 +2,7 @@
 // ABOUTME: Stand-in pages only steer the logic; they are not evidence of what real Metron returns.
 import { afterEach, describe, expect, test } from 'bun:test';
 import { confirmChoice } from './confirm';
+import { MAIN_COVER_LABEL } from './cover';
 import { createMetronClient } from './metron-client';
 
 const servers: ReturnType<typeof Bun.serve>[] = [];
@@ -75,6 +76,14 @@ describe('confirmChoice', () => {
     await expect(
       confirmChoice({ metronId: 7, coverLabel: 'Gold', clues: CLUES }, detailClient([variant('Newsstand')])),
     ).rejects.toThrow("cover is not in Metron's variant list: Gold");
+  });
+
+  test('the main cover is accepted by its label', async () => {
+    const result = await confirmChoice(
+      { metronId: 7, coverLabel: MAIN_COVER_LABEL, clues: CLUES },
+      detailClient([variant('Newsstand')]),
+    );
+    expect(result).toMatchObject({ cover: { status: 'settled', settledBy: 'user', label: MAIN_COVER_LABEL } });
   });
 
   test('the second of two same-named variants is accepted by its label', async () => {

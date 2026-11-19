@@ -3,7 +3,14 @@
 import { normalizeClues, type Clues, type RawClues } from './clues';
 import { resolveCover } from './cover-images';
 import type { CoverResult } from './cover';
-import type { MetronClient, MetronIssueDetail, MetronIssueSummary, MetronPage, MetronResult } from './metron-client';
+import type {
+  CallBudget,
+  MetronClient,
+  MetronIssueDetail,
+  MetronIssueSummary,
+  MetronPage,
+  MetronResult,
+} from './metron-client';
 import {
   decideVerdict,
   missingFromClues,
@@ -238,12 +245,12 @@ export function judgeWithDetail(clues: Clues, match: Found, leader: MetronIssueD
 async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found, detailAllowed: boolean) {
   const first = decideVerdict({ clues, ...match });
   const leaderId = first.candidates[0]?.metronId;
-  if (leaderId === undefined || !detailAllowed) return { judged: first };
+  if (leaderId === undefined || !detailAllowed) return { judged: first, detail: undefined, stale: false };
 
   const result = await client.getIssue(leaderId);
-  if (!result.ok && result.reason === 'not_found') return { judged: first };
+  if (!result.ok && result.reason === 'not_found') return { judged: first, detail: undefined, stale: true };
   const detail = unwrap(result, { issue: leaderId });
-  return { judged: judgeWithDetail(clues, match, detail), detail };
+  return { judged: judgeWithDetail(clues, match, detail), detail, stale: false };
 }
 
 function editionEcho(raw: RawClues, clues: Clues): EditionEcho | undefined {
@@ -274,11 +281,12 @@ export async function identifyComic(raw: RawClues, client: MetronClient, coversD
       return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched, ...echoed };
     }
     if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched, ...echoed };
-    const { judged, detail } = await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS);
+    const { judged, detail, stale } = await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS);
     if (judged.verdict !== 'confirmed') return { ...judged, searched, ...echoed };
-    // A leader whose detail was not fetched gets one fetch for its cover, outside the request target; a failure
-    // there only leaves the variants unknown.
-    const coverDetail = detail ?? (await fetchDetail(client, judged.candidates[0].metronId));
+    // A leader whose detail was skipped for the request target gets one fetch for its cover, still within the
+    // wait budget; a stale leader is not asked for again. A failure there only leaves the variants unknown.
+    const coverDetail =
+      detail ?? (stale ? undefined : await fetchDetail(client, judged.candidates[0].metronId, budget));
     const cover = await resolveCover(clues, coverDetail, client.getImage, coversDir);
     return { ...judged, searched, cover, ...echoed };
   } catch (error) {
@@ -287,7 +295,11 @@ export async function identifyComic(raw: RawClues, client: MetronClient, coversD
   }
 }
 
-async function fetchDetail(client: MetronClient, id: number): Promise<MetronIssueDetail | undefined> {
-  const result = await client.getIssue(id);
+export async function fetchDetail(
+  client: MetronClient,
+  id: number,
+  budget: CallBudget,
+): Promise<MetronIssueDetail | undefined> {
+  const result = await client.getIssue(id, budget);
   return result.ok ? result.data : undefined;
 }

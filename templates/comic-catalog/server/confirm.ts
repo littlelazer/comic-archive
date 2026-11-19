@@ -1,11 +1,10 @@
 // ABOUTME: Settles a Metron issue and cover the user chose from the choices offered, and returns it as an identify result.
 // ABOUTME: A chosen id that conflicts with the clues stays probable; a chosen cover label must be one Metron lists.
-import type { RawClues } from './clues';
-import { normalizeClues } from './clues';
-import { coverChoices } from './cover';
+import { normalizeClues, type Clues, type RawClues } from './clues';
+import { coverChoices, type CoverResult } from './cover';
 import { resolveCover } from './cover-images';
 import { LookupFailed, unwrap, type IdentifyResult } from './identify';
-import type { MetronClient } from './metron-client';
+import type { MetronClient, MetronIssueDetail } from './metron-client';
 import { evaluateCandidate } from './verdict';
 
 export interface ConfirmChoiceInput {
@@ -30,17 +29,24 @@ export async function confirmChoice(
     if (candidate.conflicts.length > 0) {
       return { verdict: 'probable', candidates: [candidate], missing: [], searched: true };
     }
-    if (input.coverLabel !== undefined) {
-      if (!coverChoices(detail).some((choice) => choice.label === input.coverLabel)) {
-        throw new Error(`cover is not in Metron's variant list: ${input.coverLabel}`);
-      }
-      const cover = { status: 'settled', settledBy: 'user', label: input.coverLabel } as const;
-      return { verdict: 'confirmed', candidates: [candidate], missing: [], searched: true, cover, chosenBy: 'user' };
-    }
-    const cover = await resolveCover(clues, detail, client.getImage, coversDir);
+    const cover = await coverFor(input.coverLabel, clues, detail, client, coversDir);
     return { verdict: 'confirmed', candidates: [candidate], missing: [], searched: true, cover, chosenBy: 'user' };
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;
   }
+}
+
+async function coverFor(
+  coverLabel: string | undefined,
+  clues: Clues,
+  detail: MetronIssueDetail,
+  client: MetronClient,
+  coversDir?: string,
+): Promise<CoverResult> {
+  if (coverLabel === undefined) return resolveCover(clues, detail, client.getImage, coversDir);
+  if (!coverChoices(detail).some((choice) => choice.label === coverLabel)) {
+    throw new Error(`cover is not in Metron's variant list: ${coverLabel}`);
+  }
+  return { status: 'settled', settledBy: 'user', label: coverLabel };
 }
