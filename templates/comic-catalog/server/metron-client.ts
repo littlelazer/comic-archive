@@ -2,12 +2,21 @@
 // ABOUTME: Sends no credentials; the credential gateway injects Authorization at the network boundary.
 
 export const METRON_BASE_URL = 'https://metron.cloud/api/';
+export const MAX_IMAGE_BYTES = 5_000_000;
 
 export type FailureReason = 'rate_limited' | 'metron_unavailable' | 'auth' | 'not_found' | 'bad_request';
 
 export type MetronResult<T> =
   | { ok: true; data: T }
   | { ok: false; reason: FailureReason; retryable: boolean; retryAfterSeconds?: number };
+
+export interface MetronVariant {
+  name: string;
+  price: string | null;
+  sku: string;
+  upc: string;
+  image: string | null;
+}
 
 export interface MetronIssueSummary {
   id: number;
@@ -23,7 +32,8 @@ export interface MetronIssueDetail extends Omit<MetronIssueSummary, 'issue'> {
   publisher?: { name: string };
   upc: string;
   isbn: string;
-  variants: { name: string }[];
+  price: string | null;
+  variants: MetronVariant[];
   reprints: { id: number; issue: string }[];
 }
 
@@ -145,12 +155,34 @@ export function createMetronClient(opts: MetronClientOptions) {
     }
   }
 
+  // One GET of a full image URL (images are not under the API base URL), with no retries and no credentials.
+  async function getImage(url: string): Promise<MetronResult<Uint8Array>> {
+    const notAnImage = { ok: false, reason: 'metron_unavailable', retryable: false } as const;
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': opts.userAgent, Accept: 'image/*' },
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
+      if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', retryable: false };
+      if (res.status === 404) return { ok: false, reason: 'not_found', retryable: false };
+      if (!res.ok) return { ...notAnImage, retryable: res.status >= 500 };
+      if (!res.headers.get('Content-Type')?.startsWith('image/')) return notAnImage;
+      if (Number(res.headers.get('Content-Length')) > MAX_IMAGE_BYTES) return notAnImage;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.byteLength > MAX_IMAGE_BYTES) return notAnImage;
+      return { ok: true, data: bytes };
+    } catch {
+      return unavailable;
+    }
+  }
+
   return {
     searchIssues: (params: Record<string, string>, budget?: CallBudget) =>
       get<MetronPage<MetronIssueSummary>>('issue/', params, budget),
     getIssue: (id: number, budget?: CallBudget) => get<MetronIssueDetail>(`issue/${id}/`, {}, budget),
     searchSeries: (params: Record<string, string>, budget?: CallBudget) =>
       get<MetronPage<MetronSeriesSummary>>('series/', params, budget),
+    getImage,
     callBudget: (ms: number): CallBudget => ({ deadline: now() + ms }),
   };
 }

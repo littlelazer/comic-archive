@@ -1,7 +1,7 @@
 // ABOUTME: Error-path tests for the Metron client against a local stand-in HTTP server.
 // ABOUTME: Covers 429/Retry-After, burst slowdown, 5xx retries, timeouts, auth failures and request headers.
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createMetronClient } from './metron-client';
+import { createMetronClient, MAX_IMAGE_BYTES } from './metron-client';
 
 const emptyPage = JSON.stringify({ count: 0, next: null, results: [] });
 const servers: ReturnType<typeof Bun.serve>[] = [];
@@ -203,6 +203,64 @@ describe('metron client error paths', () => {
       }),
     );
     await client.searchSeries({ name: 'thing' });
+    expect(seen?.get('user-agent')).toBe('comic-archive/0.2.0');
+    expect(seen?.has('authorization')).toBe(false);
+  });
+});
+
+describe('metron client image download', () => {
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+
+  // Images live outside the API base URL, so getImage takes a full URL.
+  function imageUrl(fetch: (req: Request) => Response | Promise<Response>) {
+    return `${standIn(fetch)}cover.jpg`;
+  }
+
+  test('getImage returns the bytes of an image/jpeg response', async () => {
+    const { client } = clientFor('http://127.0.0.1:1/api/');
+    const result = await client.getImage(
+      imageUrl(() => new Response(jpeg, { headers: { 'Content-Type': 'image/jpeg' } })),
+    );
+    expect(result).toEqual({ ok: true, data: jpeg });
+  });
+
+  test('getImage fails for a non-image content type', async () => {
+    const { client } = clientFor('http://127.0.0.1:1/api/');
+    const result = await client.getImage(
+      imageUrl(() => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } })),
+    );
+    expect(result).toEqual({ ok: false, reason: 'metron_unavailable', retryable: false });
+  });
+
+  test('getImage fails for a 404', async () => {
+    const { client } = clientFor('http://127.0.0.1:1/api/');
+    const result = await client.getImage(imageUrl(() => new Response('', { status: 404 })));
+    expect(result).toEqual({ ok: false, reason: 'not_found', retryable: false });
+  });
+
+  test('getImage fails for a body over MAX_IMAGE_BYTES', async () => {
+    const { client } = clientFor('http://127.0.0.1:1/api/');
+    const result = await client.getImage(
+      imageUrl(() => new Response(new Uint8Array(MAX_IMAGE_BYTES + 1), { headers: { 'Content-Type': 'image/jpeg' } })),
+    );
+    expect(result).toEqual({ ok: false, reason: 'metron_unavailable', retryable: false });
+  });
+
+  test('getImage fails on a timeout with a retryable result', async () => {
+    const { client } = clientFor('http://127.0.0.1:1/api/', { requestTimeoutMs: 50 });
+    const result = await client.getImage(imageUrl(() => new Promise<Response>(() => {})));
+    expect(result).toEqual({ ok: false, reason: 'metron_unavailable', retryable: true });
+  });
+
+  test('getImage sends the User-Agent and no Authorization header', async () => {
+    let seen: Headers | undefined;
+    const { client } = clientFor('http://127.0.0.1:1/api/');
+    await client.getImage(
+      imageUrl((req) => {
+        seen = req.headers;
+        return new Response(jpeg, { headers: { 'Content-Type': 'image/jpeg' } });
+      }),
+    );
     expect(seen?.get('user-agent')).toBe('comic-archive/0.2.0');
     expect(seen?.has('authorization')).toBe(false);
   });
