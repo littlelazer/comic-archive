@@ -216,7 +216,7 @@ describe('decideVerdict', () => {
     const result = decideVerdict({ ...input, confirmOnlyId: 1 });
     expect(result.verdict).toBe('probable');
     expect(result.candidates[0].metronId).toBe(2);
-    expect(result.missing).toEqual([]);
+    expect(result.missing).toEqual(['barcode_addon']);
     expect(decideVerdict({ ...input, confirmOnlyId: 2 }).verdict).toBe('confirmed');
   });
 
@@ -277,18 +277,25 @@ describe('decideVerdict', () => {
     expect(result.missing).toEqual(['issue_number', 'cover_date', 'barcode_addon']);
   });
 
-  test('asks for the add-on only on covers from the 5-digit add-on era, whose add-on pins the issue', () => {
-    const missingFor = (coverYear: number) =>
-      decideVerdict({
-        clues: clues({ seriesTitle: 'The Thing', upcMain: '071486029661', coverYear }),
-        issues: [summary({ cover_date: `${coverYear}-07-01` })],
-        totalCount: 1,
-        matchedBy: 'upc_prefix',
-      }).missing;
-    expect(missingFor(1983)).not.toContain('barcode_addon');
-    expect(missingFor(2007)).not.toContain('barcode_addon');
-    expect(missingFor(2008)).toContain('barcode_addon');
-    expect(missingFor(2022)).toContain('barcode_addon');
+  test('barcode_addon is asked for a 1996 cover with a main barcode and no add-on', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', upcMain: '071486029661', coverYear: 1996 }),
+      issues: [summary({ cover_date: '1996-07-01' })],
+      totalCount: 1,
+      matchedBy: 'upc_prefix',
+    });
+    expect(result.missing).toContain('barcode_addon');
+  });
+
+  test('title comes first in missing when no title was read', () => {
+    const result = decideVerdict({
+      clues: clues({ upcMain: '071486029661' }),
+      issues: [summary()],
+      totalCount: 1,
+      matchedBy: 'upc_prefix',
+    });
+    expect(result.verdict).not.toBe('confirmed');
+    expect(result.missing).toEqual(['title', 'issue_number', 'cover_date', 'barcode_addon']);
   });
 
   test('confirms a later printing at issue level and flags variantOrPrintingUndetermined when variants exist', () => {

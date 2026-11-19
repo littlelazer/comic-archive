@@ -1,5 +1,5 @@
-// ABOUTME: Unit tests for the get_comic tool using a stand-in Metron client.
-// ABOUTME: Covers argument validation and passing failure results through without isError.
+// ABOUTME: Unit tests for the get_comic and identify_comic tools using a stand-in Metron client.
+// ABOUTME: Covers argument validation, clue parsing and passing failure results through without isError.
 import { describe, expect, test } from 'bun:test';
 import type { MetronClient } from './metron-client';
 import { getComicTool, identifyComicTool, parseClues } from './tools';

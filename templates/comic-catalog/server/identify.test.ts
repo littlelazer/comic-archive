@@ -161,7 +161,7 @@ describe('judging with the leader detail', () => {
     const result = judgeWithDetail(clues, match, leader);
     expect(result.verdict).toBe('probable');
     expect(result.candidates.map((c) => c.metronId)).toEqual([2, 1]);
-    expect(result.missing).toEqual([]);
+    expect(result.missing).toEqual(['barcode_addon']);
   });
 
   test('the leader whose detail agrees can still confirm', () => {
@@ -228,7 +228,18 @@ describe('what was searched', () => {
     expect(await identifyComic({ issue_number: '1', cover_year: 1983 }, client)).toEqual({
       verdict: 'no_match',
       candidates: [],
-      missing: ['barcode_closeup'],
+      missing: ['title', 'barcode_closeup'],
+      searched: false,
+    });
+    expect(requests).toEqual([]);
+  });
+
+  test('a thin clue set that searched nothing asks for the title when no other hint applies', async () => {
+    const { client, requests } = standInMetron(() => new Response('', { status: 503 }));
+    expect(await identifyComic({ issue_number: '1', cover_year: 1965 }, client)).toEqual({
+      verdict: 'no_match',
+      candidates: [],
+      missing: ['title'],
       searched: false,
     });
     expect(requests).toEqual([]);
@@ -239,7 +250,7 @@ describe('what was searched', () => {
     expect(await identifyComic({ isbn: '9781643375434' }, client)).toEqual({
       verdict: 'no_match',
       candidates: [],
-      missing: ['issue_number', 'cover_date'],
+      missing: ['title', 'issue_number', 'cover_date'],
       searched: false,
     });
     expect(requests).toEqual([]);
@@ -251,6 +262,16 @@ describe('what was searched', () => {
       verdict: 'no_match',
       candidates: [],
       missing: [],
+      searched: true,
+    });
+  });
+
+  test('a barcode-only search that finds nothing is no_match with missing [title]', async () => {
+    const { client } = standInMetron(() => pageOf([]));
+    expect(await identifyComic({ upc_main: '071486029663' }, client)).toEqual({
+      verdict: 'no_match',
+      candidates: [],
+      missing: ['title'],
       searched: true,
     });
   });
@@ -342,7 +363,40 @@ describe('trades across several series', () => {
     expect(result.missing).toContain('isbn');
   });
 
-  test('the hardcover path stays within 4 requests', async () => {
+  test('a bound-trade title search follows page 2 when page 1 has no Hardcover or Omnibus', async () => {
+    const { client, requests } = standInMetron((url) => {
+      if (url.pathname.endsWith('/series/')) {
+        if (url.searchParams.has('series_type')) return pageOf([]);
+        if (url.searchParams.get('page') === '2') return pageOf([tradeSeries(80, 'Batman HC (2023)', 'Hardcover')]);
+        return pageOf([tradeSeries(90, 'Batman Annual', 'Annual')], 150);
+      }
+      if (url.searchParams.has('series_id')) return pageOf([tradeIssue(800, 80, 'Batman HC (2023)')]);
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(requests.some((r) => r.includes('series/?name=Batman&page=2'))).toBe(true);
+    expect(result.candidates.map((c) => c.metronId)).toEqual([800]);
+  });
+
+  test('a lookup uses at most 5 requests', async () => {
+    const { client, requests } = standInMetron((url) => {
+      if (url.pathname.endsWith('/series/')) {
+        if (url.searchParams.has('series_type')) return pageOf([]);
+        if (url.searchParams.get('page') === '2') {
+          return pageOf([tradeSeries(80, 'Batman HC (2023)', 'Hardcover'), tradeSeries(81, 'Batman HC (2019)', 'Hardcover')]);
+        }
+        return pageOf([tradeSeries(90, 'Batman Annual', 'Annual')], 150);
+      }
+      if (url.searchParams.has('series_name')) return pageOf(singleIssues, 250);
+      if (url.searchParams.has('series_id')) return pageOf([tradeIssue(800, 80, 'Batman HC (2023)')]);
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic(BATMAN_TRADE, client);
+    expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
+    expect(requests).toHaveLength(5);
+  });
+
+  test('the hardcover path stays within 5 requests', async () => {
     const { client, requests } = trades(
       [],
       [tradeSeries(80, 'Batman HC (2023)', 'Hardcover'), tradeSeries(81, 'Batman HC (2019)', 'Hardcover')],
@@ -351,7 +405,7 @@ describe('trades across several series', () => {
     const result = await identifyComic(BATMAN_TRADE, client);
     expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
     expect(result.candidates.map((c) => c.metronId)).toEqual([800]);
-    expect(requests.length).toBeLessThanOrEqual(4);
+    expect(requests.length).toBeLessThanOrEqual(5);
   });
 });
 

@@ -4,7 +4,7 @@ import { normalizeIssueNumber, type Clues } from './clues';
 import type { MetronIssueDetail, MetronIssueSummary } from './metron-client';
 
 export type Verdict = 'confirmed' | 'probable' | 'ambiguous' | 'no_match';
-export type MissingHint = 'barcode_closeup' | 'barcode_addon' | 'indicia' | 'isbn' | 'issue_number' | 'cover_date';
+export type MissingHint = 'barcode_closeup' | 'barcode_addon' | 'indicia' | 'isbn' | 'issue_number' | 'cover_date' | 'title';
 
 export interface Candidate {
   metronId: number;
@@ -35,11 +35,10 @@ type MetronIssue = MetronIssueSummary | MetronIssueDetail;
 const MAX_CANDIDATES = 5;
 const BARCODE_BODY_LENGTH = 11;
 const FIRST_BARCODE_YEAR = 1977;
-// Before 5-digit add-ons, the 2-digit add-on is the cover month and does not narrow the issue. The live
-// findings (Phase 2 Task 5) show 2-digit add-ons in 1983-84 and 5-digit ones in 2022 but do not pin the
-// change-over, so 2008 is used as the first year of 5-digit add-ons.
-const FIRST_FULL_ADDON_YEAR = 2008;
-
+// Metron stores 2-digit add-ons for 1983 covers (The Thing #1 is 11 digits plus 2) and 5-digit ones for
+// 1993 and 1996 covers (2099 Unlimited #1 and Solar, Man of the Atom #55 are 17 digits). A 1988 Amazing
+// Spider-Man #300 has no stored barcode, and no cover from 1984 to 1992 with one was found, so the change-over
+// year is not known. The add-on is therefore asked for whenever a main barcode is read without one.
 // A candidate plus which clues agreed, which decideVerdict needs for its confirm rule.
 interface Assessment {
   candidate: Candidate;
@@ -154,6 +153,7 @@ function meetsConfirmCondition(clues: Clues, matchedBy: MatchInput['matchedBy'],
 
 function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
   const missing: MissingHint[] = [];
+  if (clues.seriesTitle === undefined) missing.push('title');
   if (clues.issueNumber === undefined) missing.push('issue_number');
   if (clues.coverYear === undefined) missing.push('cover_date');
   if (clues.format === 'trade') {
@@ -161,8 +161,7 @@ function missingHints(clues: Clues, listed: Assessment[]): MissingHint[] {
   } else {
     const barcodeEra = clues.coverYear === undefined || clues.coverYear >= FIRST_BARCODE_YEAR;
     if (clues.upcMain === undefined && barcodeEra) missing.push('barcode_closeup');
-    const fullAddonEra = clues.coverYear === undefined || clues.coverYear >= FIRST_FULL_ADDON_YEAR;
-    if (clues.upcMain !== undefined && clues.upcAddon === undefined && fullAddonEra) missing.push('barcode_addon');
+    if (clues.upcMain !== undefined && clues.upcAddon === undefined) missing.push('barcode_addon');
   }
   if (listed.some((a) => a.printingConflict) || listed[0]?.candidate.variantOrPrintingUndetermined) {
     missing.push('indicia');
@@ -195,9 +194,9 @@ export function missingFromClues(clues: Clues): MissingHint[] {
 //   has no mark is not a conflict; it only sets isReprintOrFacsimile.
 // - With confirmOnlyId set, a sole conflict-free candidate with any other id is probable, not confirmed.
 // - Candidates are ranked by fewest conflicts, then most evidence, then Metron's order, and capped at 5.
-// - missing (only when not confirmed): issue_number, cover_date, then barcode_closeup (no barcode read and the
-//   cover year is 1977 or later or unknown) / barcode_addon (main read, add-on not, and the cover year is 2008
-//   or later or unknown) for single issues or isbn for trades, then indicia when a listed candidate has a
+// - missing (only when not confirmed): title (no series title was read), issue_number, cover_date, then
+//   barcode_closeup (no barcode read and the cover year is 1977 or later or unknown) / barcode_addon (main
+//   read, add-on not) for single issues or isbn for trades, then indicia when a listed candidate has a
 //   printing conflict or the top candidate has variantOrPrintingUndetermined.
 export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } {
   const { clues, issues, totalCount, matchedBy, confirmOnlyId } = input;

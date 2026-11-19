@@ -68,7 +68,7 @@ const BOUND_SERIES_TYPES = ['Hardcover', 'Omnibus'];
 // The spec's total wait per identify_comic call; once it has passed, no new Metron request starts.
 const CALL_WAIT_BUDGET_MS = 60_000;
 // The spec's target number of Metron requests per identify_comic call.
-const MAX_REQUESTS = 4;
+const MAX_REQUESTS = 5;
 // Metron names trade series like "Batman TPB (2022)"; the suffix is dropped to compare them with a cover title.
 const TRADE_SUFFIX = /\s+(?:TPB|HC|Omnibus)(?:\s+\(\d{4}\))?$/i;
 
@@ -161,7 +161,7 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
     }
 
     // Metron lacks barcodes for some issues, so the barcode's other issues name the series to look in.
-    // Skipped when a title can be searched instead or an exact lookup was made, to stay within 4 requests.
+    // Skipped when a title can be searched instead or an exact lookup was made, to stay within 5 requests.
     // Trade-off: a full barcode and issue number with no title therefore never reach this series fallback.
     if (clues.issueNumber && !clues.seriesTitle && !exactTried) {
       const barcodePage = await searchIssues(client, prefix);
@@ -198,8 +198,13 @@ async function findTradeSeries(client: Lookup, title: string) {
   const paperbacks = await searchSeries(client, { series_type: TRADE_SERIES_TYPE, name });
   if (paperbacks.length > 0) return paperbacks;
   // Metron's series_type filter takes one type (a list is a 400), so hardcovers and omnibuses come from one
-  // unfiltered title search, picked by type here, which keeps a trade lookup within 4 requests.
-  const all = await searchSeries(client, { name });
+  // unfiltered title search, picked by type here. A common title's first page may hold neither, so the
+  // second page is read when there is one.
+  const firstPage = unwrap(await client.searchSeries({ name }), { name });
+  let all = firstPage.results;
+  if (firstPage.next && !all.some((s) => BOUND_SERIES_TYPES.includes(s.series_type.name))) {
+    all = [...all, ...(await searchSeries(client, { name, page: '2' }))];
+  }
   for (const type of BOUND_SERIES_TYPES) {
     const ofType = all.filter((s) => s.series_type.name === type);
     if (ofType.length > 0) return ofType;
@@ -280,7 +285,7 @@ export async function identifyComic(raw: RawClues, client: MetronClient, coversD
     if (!match && !searched) {
       return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched, ...echoed };
     }
-    if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched, ...echoed };
+    if (!match) return { verdict: 'no_match', candidates: [], missing: clues.seriesTitle ? [] : ['title'], searched, ...echoed };
     const { judged, detail, stale } = await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS);
     if (judged.verdict !== 'confirmed') return { ...judged, searched, ...echoed };
     // A leader whose detail was skipped for the request target gets one fetch for its cover, still within the
