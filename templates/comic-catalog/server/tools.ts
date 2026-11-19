@@ -28,6 +28,7 @@ export function getComicTool(client: MetronClient): ToolDef {
 
 const LEGIBLE = 'Give it only if it is legible on the photo; never guess.';
 const FORMATS = ['single_issue', 'trade', 'unknown'];
+const EDITIONS = ['newsstand', 'direct'];
 
 const CLUE_PROPERTIES = {
   series_title: { type: 'string', description: `Series title as printed on the cover. ${LEGIBLE}` },
@@ -41,6 +42,15 @@ const CLUE_PROPERTIES = {
   isbn: { type: 'string', description: `ISBN printed on a trade paperback or hardcover. ${LEGIBLE}` },
   format: { type: 'string', enum: FORMATS, description: `Whether the cover is a single issue or a trade collection. ${LEGIBLE}` },
   printing: { type: 'string', description: `Printing or edition marking, for example "2nd printing" or "facsimile edition". ${LEGIBLE}` },
+  edition: {
+    type: 'string',
+    enum: EDITIONS,
+    description: `newsstand (price barcode, no direct-market mark) or direct (logo or "Direct Edition" in the barcode box). ${LEGIBLE}`,
+  },
+  variant_marking: {
+    type: 'string',
+    description: `variant text as printed, e.g. "Cover B", "1:25", "Virgin", an artist credit. ${LEGIBLE}`,
+  },
 };
 
 const CLUE_TYPES: Record<string, 'string' | 'integer'> = Object.fromEntries(
@@ -61,6 +71,9 @@ export function parseClues(args: unknown): RawClues {
     if (type === 'integer' && !Number.isInteger(value)) throw new Error(`${name} must be an integer`);
     if (name === 'format' && !FORMATS.includes(value as string)) {
       throw new Error(`format must be one of ${FORMATS.join(', ')}`);
+    }
+    if (name === 'edition' && !EDITIONS.includes(value as string)) {
+      throw new Error(`edition must be one of ${EDITIONS.join(', ')}`);
     }
     clues[name] = value;
   }

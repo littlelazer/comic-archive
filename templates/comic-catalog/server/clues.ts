@@ -12,6 +12,8 @@ export interface RawClues {
   isbn?: string;
   format?: 'single_issue' | 'trade' | 'unknown';
   printing?: string;
+  edition?: 'newsstand' | 'direct';
+  variant_marking?: string;
 }
 
 export interface Clues {
@@ -25,6 +27,11 @@ export interface Clues {
   isbn?: string;
   format: 'single_issue' | 'trade' | 'unknown';
   printingKind?: 'original' | 'later_printing' | 'reprint' | 'facsimile';
+  printingOrdinal?: number;
+  edition?: 'newsstand' | 'direct';
+  variantMarking?: string;
+  // Cover price in dollars.
+  price?: number;
 }
 
 const FIRST_COVER_YEAR = 1930;
@@ -63,6 +70,22 @@ function printingKind(value: string | undefined): Clues['printingKind'] {
   return undefined;
 }
 
+const ORDINAL_WORDS = ['second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+
+function printingOrdinal(value: string | undefined): number | undefined {
+  const printing = text(value)?.toLowerCase();
+  if (!printing || !LATER_PRINTING.test(printing)) return undefined;
+  const word = ORDINAL_WORDS.indexOf(printing.split(' ')[0]);
+  return word >= 0 ? word + 2 : parseInt(printing, 10);
+}
+
+// Takes the first "$N" or "$N.NN" or "N¢" amount, in dollars; anything else is undefined.
+export function normalizePrice(printed: string): number | undefined {
+  const match = /\$\s*(\d+(?:\.\d{1,2})?)|(\d+)\s*¢/.exec(printed);
+  if (!match) return undefined;
+  return match[1] !== undefined ? Number(match[1]) : Number(match[2]) / 100;
+}
+
 function coverMonth(value: number | undefined): number | undefined {
   return value !== undefined && Number.isInteger(value) && value >= 1 && value <= 12 ? value : undefined;
 }
@@ -78,6 +101,7 @@ export function normalizeClues(raw: RawClues): Clues {
   const issueNumber = text(raw.issue_number);
   const isbn = isbn13(raw.isbn);
   const format = raw.format ?? 'unknown';
+  const price = text(raw.price);
   return {
     seriesTitle: text(raw.series_title),
     issueNumber: issueNumber && text(normalizeIssueNumber(issueNumber)),
@@ -90,5 +114,9 @@ export function normalizeClues(raw: RawClues): Clues {
     // Single issues carry no ISBN, so a legible one on a cover of unknown format marks a trade.
     format: format === 'unknown' && isbn !== undefined ? 'trade' : format,
     printingKind: printingKind(raw.printing),
+    printingOrdinal: printingOrdinal(raw.printing),
+    edition: raw.edition,
+    variantMarking: text(raw.variant_marking),
+    price: price === undefined ? undefined : normalizePrice(price),
   };
 }

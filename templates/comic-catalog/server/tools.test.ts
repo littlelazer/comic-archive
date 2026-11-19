@@ -45,7 +45,7 @@ describe('identifyComicTool', () => {
     const schema = tool.inputSchema as { properties: object; required?: string[]; additionalProperties: boolean };
     expect(tool.name).toBe('identify_comic');
     expect(Object.keys(schema.properties).sort()).toEqual(
-      ['cover_month', 'cover_year', 'format', 'isbn', 'issue_number', 'price', 'printing', 'publisher', 'series_title', 'upc_addon', 'upc_main'],
+      ['cover_month', 'cover_year', 'edition', 'format', 'isbn', 'issue_number', 'price', 'printing', 'publisher', 'series_title', 'upc_addon', 'upc_main', 'variant_marking'],
     );
     expect(schema.required).toBeUndefined();
     expect(schema.additionalProperties).toBe(false);
@@ -74,6 +74,10 @@ describe('identifyComicTool', () => {
 
   test('rejects a format outside the enum', async () => {
     await expect(tool.handler({ format: 'omnibus' })).rejects.toThrow(/format/);
+  });
+
+  test('rejects an edition outside the enum', async () => {
+    await expect(tool.handler({ edition: 'foil' })).rejects.toThrow('edition must be one of newsstand, direct');
   });
 
   test('rejects arguments that are not an object', async () => {

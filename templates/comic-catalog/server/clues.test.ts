@@ -1,7 +1,7 @@
 // ABOUTME: Unit tests for normalizing the clues read off a cover into the Clues shape.
 // ABOUTME: Covers issue numbers, UPC/ISBN validation, printing classification, and date bounds.
 import { describe, expect, test } from 'bun:test';
-import { normalizeClues, normalizeIssueNumber } from './clues';
+import { normalizeClues, normalizeIssueNumber, normalizePrice } from './clues';
 
 describe('normalizeIssueNumber', () => {
   test.each([
@@ -116,5 +116,49 @@ describe('normalizeClues cover date', () => {
     expect(normalizeClues({ cover_year: nextYear }).coverYear).toBe(nextYear);
     expect(normalizeClues({ cover_year: 1929 }).coverYear).toBeUndefined();
     expect(normalizeClues({ cover_year: nextYear + 1 }).coverYear).toBeUndefined();
+  });
+});
+
+describe('normalizePrice', () => {
+  test.each([
+    ['$4.99', 4.99],
+    ['60¢', 0.6],
+    ['$1.00 US / $1.25 CAN', 1],
+    ['$3', 3],
+    ['free', undefined],
+  ])('%p becomes %p dollars', (printed, dollars) => {
+    expect(normalizePrice(printed)).toBe(dollars);
+  });
+
+  test('is carried onto the clues', () => {
+    expect(normalizeClues({ price: '$1.25' }).price).toBe(1.25);
+    expect(normalizeClues({}).price).toBeUndefined();
+  });
+});
+
+describe('normalizeClues printing ordinal', () => {
+  test.each([
+    ['10th printing', 10],
+    ['second printing', 2],
+    ['3rd print', 3],
+  ])('%p has ordinal %p', (printing, ordinal) => {
+    expect(normalizeClues({ printing }).printingOrdinal).toBe(ordinal);
+  });
+
+  test.each([['first printing'], ['facsimile edition'], ['reprint']])('%p has no ordinal', (printing) => {
+    expect(normalizeClues({ printing }).printingOrdinal).toBeUndefined();
+  });
+});
+
+describe('normalizeClues edition and variant marking', () => {
+  test('passes the edition through and trims the variant marking', () => {
+    expect(normalizeClues({ edition: 'direct', variant_marking: ' Cover B ' })).toMatchObject({
+      edition: 'direct',
+      variantMarking: 'Cover B',
+    });
+  });
+
+  test('drops a blank variant marking', () => {
+    expect(normalizeClues({ variant_marking: '  ' }).variantMarking).toBeUndefined();
   });
 });
