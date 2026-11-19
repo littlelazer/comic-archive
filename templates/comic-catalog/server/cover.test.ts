@@ -163,6 +163,24 @@ describe('settleCover', () => {
     });
   });
 
+  test('a single-letter cover marking matches only that cover letter', () => {
+    const issue = detail([variant({ name: 'Cover B Frank Miller' }), variant({ name: 'Cover A Jim Lee' }), variant({ name: 'Cover C' })]);
+    expect(settleCover(clues({ variantMarking: 'Cover A' }), issue)).toEqual({
+      status: 'settled',
+      settledBy: 'markings',
+      label: 'Cover A Jim Lee',
+    });
+  });
+
+  test('a variant marking matches whole words, not parts of words', () => {
+    const issue = detail([variant({ name: 'Unfoiled Edition' }), variant({ name: 'Foil' })]);
+    expect(settleCover(clues({ variantMarking: 'Foil' }), issue)).toEqual({
+      status: 'settled',
+      settledBy: 'markings',
+      label: 'Foil',
+    });
+  });
+
   test('newsstand keeps newsstand names and direct drops them', () => {
     const issue = detail([variant({ name: 'Newsstand Edition' }), variant({ name: 'Foil' })]);
     expect(settleCover(clues({ edition: 'newsstand' }), issue)).toEqual({

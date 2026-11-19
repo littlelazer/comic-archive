@@ -25,7 +25,7 @@ export interface CoverResult {
 }
 
 const ADDON_LENGTH = 5;
-const ORDINAL_WORDS = ['', '', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+const ORDINAL_WORDS = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 
 function parsePrice(price: string | null): number | null {
   if (price === null) return null;
@@ -104,8 +104,8 @@ function filterByVariantMarking(clues: Clues, choices: CoverChoice[]): CoverChoi
   if (clues.variantMarking === undefined) return choices;
   const wanted = wordsOf(clues.variantMarking);
   return choices.filter((choice) => {
-    const name = choice.name.toLowerCase();
-    return wanted.every((word) => name.includes(word));
+    const words = wordsOf(choice.name);
+    return wanted.every((word) => words.includes(word));
   });
 }
 
