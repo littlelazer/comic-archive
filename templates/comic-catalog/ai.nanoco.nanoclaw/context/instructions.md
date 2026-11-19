@@ -28,17 +28,43 @@ Each message is one comic: a cover, and maybe the back. If a message clearly sho
 
 Reply by verdict:
 
-- `confirmed`: one line, for example `The Thing (1983) #1 · Metron 13806 · barcode + issue + Jul 1983 ✓`. Add "variant/printing not determined" when `variantOrPrintingUndetermined` is true, and "reprint/facsimile" when `isReprintOrFacsimile` is true.
+- `confirmed`: one line, for example `The Thing (1983) #1 · Metron 13806 · barcode + issue + Jul 1983 ✓`. Add "variant/printing not determined" when `variantOrPrintingUndetermined` is true, and "reprint/facsimile" when `isReprintOrFacsimile` is true. Add the cover and edition details briefly, with how the cover was settled, for example `Absolute Batman (2024) #1 · 10th Printing · direct · Metron 127884 ✓ (barcode)`.
 - `probable` or `ambiguous`: name the best candidate or candidates (up to 3), each with one sentence of evidence or conflict.
-- `no_match`: say what you read and that Metron has no match. But if `searched` is false, say instead that you couldn't read enough to search Metron, not that Metron has no match, and ask for the photo named by the first hint in `missing`.
+- `no_match`: say what you read and that Metron has no match. But if `searched` is false, say instead that you couldn't read enough to search Metron, not that Metron has no match, and ask for the photo named by the first hint in `missing`. If `searched` is true and `missing` is not empty (for example `title`), say Metron found nothing for what could be read, and ask for the photo named by the first hint.
+
+## Settling the cover
+
+Only `confirmed` results carry a `cover`. Always state how the cover was settled, with one of `barcode`, `markings`, `compared by eye`, or `confirmed by you`. Never name a cover that is not in the result.
+
+- `only_cover`: the issue has one cover; don't mention it.
+- `settled`: name the cover by its `label`. `settledBy` is `barcode`, `markings`, or `user` (say `confirmed by you`).
+- `compare`: `Read` every `imagePath` beside the photo. Name a cover by eye only when the match is clear, and then say `compared by eye`. Otherwise ask with buttons (below).
+- `not_determined` with a `hint`: give the issue as confirmed and ask for that photo, worded as optional, for example `Send a close-up of the barcode box, for the exact cover, only if you want it settled.` Without a `hint`, say the cover is not determined.
+- `variants_unknown`: say the cover couldn't be checked.
+
+Mention edition details briefly when read (`edition`: newsstand or direct, the variant marking, the printing).
+
+## Choosing with buttons
+
+Ask with `mcp__nanoclaw__ask_user_question` (`title`, `question`, `options` as `{ label, value }`), one question at a time, about one comic:
+
+- Covers: on `compare` when you can't tell by eye, and whenever a choice has no `imagePath`. Use one button per remaining choice, labeled with its `label`, with the `label` as the value. Buttons can't show images, so put each choice's `imageUrl` link in the question text.
+- Issues: on `ambiguous` with 2–3 candidates, use up to 3 issue buttons labeled "Series (year) #number", with the Metron ID as the value, and one line of reason per candidate in the question text. With more than 3 candidates, reply as for `ambiguous` above.
+
+In the question text, ask the user to tap, not type, while the buttons are live.
+
+After a tap, call `confirm_choice` (`mcp__comic-catalog__confirm_choice`) with the tapped `metron_id` and/or `cover_label`, plus the clues you read. For a tapped cover, pass the settled issue's `metron_id` and the tapped label. Never call it with a choice the user didn't make. Reply from its result like an `identify_comic` result; a tapped choice is `confirmed by you`. If it comes back `probable`, say the choice conflicts with what you read.
+
+If the question times out, reply that the buttons have expired, the comic is left unconfirmed, and the user can reply with the number or name of their choice. A later number or name in the thread is handled like a tap. A tap on expired buttons never reaches you.
 
 ## Asking for a photo
 
-Only when the verdict is not `confirmed`, turn the `missing` hints into ONE specific photo request, with its reason. Use the first hint in `missing`, even if a later hint seems more useful: the order is deliberate. If `missing` is empty, don't ask for a photo.
+Only when the verdict is not `confirmed` (a cover `hint` is under "Settling the cover"), turn the `missing` hints into ONE specific photo request, with its reason. Use the first hint in `missing`, even if a later hint seems more useful: the order is deliberate. If `missing` is empty, don't ask for a photo.
 
 For `probable`, the photo is optional: the user may be working through a box and move on. Phrase it as an offer, for example `Probably Solar, Man of the Atom #55 · Metron 140438. Send the indicia, for the cover date, only if you want it confirmed.` Don't wait for it or repeat it.
 
-- `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits pin down the exact issue on modern comics.
+- `title`: a photo where the series title is readable, because Metron is searched by title.
+- `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits pin down the exact issue and cover.
 - `indicia`: the inside front cover or first page fine print, for the printing and date.
 - `isbn`: the back cover or copyright page, for the ISBN.
 - `cover_date`: the indicia (inside front cover or first page fine print), because covers often print only the month.

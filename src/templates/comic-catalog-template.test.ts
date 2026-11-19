@@ -91,4 +91,65 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/never name a match/i);
     expect(tpl.instructions).toMatch(/`retryable` is false and the reason is not `auth`/);
   });
+
+  it('compares cover choices by eye beside the photo', () => {
+    expect(tpl.instructions).toMatch(/`compare`: `Read` every `imagePath` beside the photo/);
+  });
+
+  it('names a cover by eye only when the match is clear, and says so', () => {
+    expect(tpl.instructions).toMatch(/Name a cover by eye only when the match is clear/);
+    expect(tpl.instructions).toMatch(/`compared by eye`/);
+  });
+
+  it('asks with NanoClaw buttons, one per remaining cover or up to 3 issues', () => {
+    expect(tpl.instructions).toMatch(/`mcp__nanoclaw__ask_user_question`/);
+    expect(tpl.instructions).toMatch(/one button per remaining choice, labeled with its `label`/);
+    expect(tpl.instructions).toMatch(/`ambiguous` with 2–3 candidates, use up to 3 issue buttons/);
+  });
+
+  it('asks with buttons whenever a cover choice has no image to compare', () => {
+    expect(tpl.instructions).toMatch(/whenever a choice has no `imagePath`/);
+  });
+
+  it('settles a tap with confirm_choice and never with a choice the user did not make', () => {
+    expect(tpl.instructions).toMatch(/After a tap, call `confirm_choice`/);
+    expect(tpl.instructions).toMatch(/the tapped `metron_id` and\/or `cover_label`/);
+    expect(tpl.instructions).toMatch(/Never call it with a choice the user didn't make/);
+    expect(tpl.instructions).toMatch(/`confirmed by you`/);
+  });
+
+  it('handles a button timeout and a later reply with a number like a tap', () => {
+    expect(tpl.instructions).toMatch(/the buttons have expired/);
+    expect(tpl.instructions).toMatch(/can reply with the number/);
+    expect(tpl.instructions).toMatch(/A later number or name in the thread is handled like a tap/);
+    expect(tpl.instructions).toMatch(/tap, not type/);
+  });
+
+  it('asks for a cover hint photo as optional when the cover is not determined', () => {
+    expect(tpl.instructions).toMatch(/`not_determined` with a `hint`: .*worded as optional/);
+  });
+
+  it('says the cover could not be checked when the variants are unknown', () => {
+    expect(tpl.instructions).toMatch(/`variants_unknown`: say the cover couldn't be checked/);
+  });
+
+  it('always states how the cover was settled', () => {
+    expect(tpl.instructions).toMatch(/state how the cover was settled/i);
+    for (const method of ['`barcode`', '`markings`', '`compared by eye`', '`confirmed by you`']) {
+      expect(tpl.instructions).toContain(method);
+    }
+  });
+
+  it('mentions edition details briefly when read', () => {
+    expect(tpl.instructions).toMatch(/Mention edition details briefly when read/);
+  });
+
+  it('does not stop at no match when a searched lookup still has a hint, such as the title', () => {
+    expect(tpl.instructions).toMatch(/Metron found nothing for what could be read/);
+  });
+
+  it('gives the add-on reason and asks for a readable title', () => {
+    expect(tpl.instructions).toMatch(/the add-on digits pin down the exact issue and cover/);
+    expect(tpl.instructions).toMatch(/`title`: a photo where the series title is readable/);
+  });
 });
