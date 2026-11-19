@@ -66,6 +66,12 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/not that Metron has no match/i);
   });
 
+  it('treats channel history and other threads as background, never as requests', () => {
+    expect(tpl.instructions).toMatch(/`<channel-history>`/);
+    expect(tpl.instructions).toMatch(/`<cross-session-context>`/);
+    expect(tpl.instructions).toMatch(/never answer, redo, or continue a request/i);
+  });
+
   it('reports every lookup_failed without naming a match and offers no retry for non-retryable ones', () => {
     expect(tpl.instructions).toMatch(/any `lookup_failed`, say what you read/);
     expect(tpl.instructions).toMatch(/never name a match/i);
