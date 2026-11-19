@@ -1,6 +1,8 @@
 // ABOUTME: Runs the Metron search cascade for the clues read off a cover and returns the verdict with candidates.
 // ABOUTME: Single issues go barcode exact, barcode prefix, then series and number; trades go series then volume.
 import { normalizeClues, type Clues, type RawClues } from './clues';
+import { resolveCover } from './cover-images';
+import type { CoverResult } from './cover';
 import type { MetronClient, MetronIssueDetail, MetronIssueSummary, MetronPage, MetronResult } from './metron-client';
 import {
   decideVerdict,
@@ -14,7 +16,7 @@ import {
 
 export type LookupFailureReason = 'rate_limited' | 'metron_unavailable' | 'auth';
 
-type LookupFailure = {
+export type LookupFailure = {
   verdict: 'lookup_failed';
   reason: LookupFailureReason;
   retryable: boolean;
@@ -25,9 +27,24 @@ type LookupFailure = {
 
 // searched is false when the clues were too thin to make any Metron search, so no_match then says nothing
 // about what Metron has.
+// cover is set only on a confirmed verdict. edition echoes the edition, variant marking and printing clues read.
 export type IdentifyResult =
-  | { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[]; searched: boolean }
+  | {
+      verdict: Verdict;
+      candidates: Candidate[];
+      missing: MissingHint[];
+      searched: boolean;
+      cover?: CoverResult;
+      edition?: EditionEcho;
+      chosenBy?: 'user';
+    }
   | LookupFailure;
+
+export interface EditionEcho {
+  edition?: 'newsstand' | 'direct';
+  variantMarking?: string;
+  printing?: string;
+}
 
 type Found = Omit<MatchInput, 'clues'>;
 
@@ -48,13 +65,13 @@ const MAX_REQUESTS = 4;
 // Metron names trade series like "Batman TPB (2022)"; the suffix is dropped to compare them with a cover title.
 const TRADE_SUFFIX = /\s+(?:TPB|HC|Omnibus)(?:\s+\(\d{4}\))?$/i;
 
-class LookupFailed extends Error {
+export class LookupFailed extends Error {
   constructor(readonly result: LookupFailure) {
     super(result.reason);
   }
 }
 
-function unwrap<T>(result: MetronResult<T>, query: object): T {
+export function unwrap<T>(result: MetronResult<T>, query: object): T {
   if (result.ok) return result.data;
   if (result.reason === 'not_found' || result.reason === 'bad_request') {
     // Metron rejecting a query is a bug in how we build it, not an outage, so it is not offered as retryable.
@@ -217,17 +234,29 @@ export function judgeWithDetail(clues: Clues, match: Found, leader: MetronIssueD
 // Variants, reprints and printing marks are only on an issue's detail, so the leading candidate is judged on
 // its detail. A detail that is not found means the search result was stale; the leader is then judged as found.
 // When the searches used the whole request budget the detail is skipped, so a trade then cannot confirm.
+// The detail is returned when it was fetched, so a confirmed result can settle its cover from it.
 async function judgeWithLeaderDetail(clues: Clues, client: Lookup, match: Found, detailAllowed: boolean) {
   const first = decideVerdict({ clues, ...match });
   const leaderId = first.candidates[0]?.metronId;
-  if (leaderId === undefined || !detailAllowed) return first;
+  if (leaderId === undefined || !detailAllowed) return { judged: first };
 
   const result = await client.getIssue(leaderId);
-  if (!result.ok && result.reason === 'not_found') return first;
-  return judgeWithDetail(clues, match, unwrap(result, { issue: leaderId }));
+  if (!result.ok && result.reason === 'not_found') return { judged: first };
+  const detail = unwrap(result, { issue: leaderId });
+  return { judged: judgeWithDetail(clues, match, detail), detail };
 }
 
-export async function identifyComic(raw: RawClues, client: MetronClient): Promise<IdentifyResult> {
+function editionEcho(raw: RawClues, clues: Clues): EditionEcho | undefined {
+  const printing = raw.printing?.trim();
+  const echo: EditionEcho = {
+    ...(clues.edition && { edition: clues.edition }),
+    ...(clues.variantMarking && { variantMarking: clues.variantMarking }),
+    ...(printing && { printing }),
+  };
+  return Object.keys(echo).length > 0 ? echo : undefined;
+}
+
+export async function identifyComic(raw: RawClues, client: MetronClient, coversDir?: string): Promise<IdentifyResult> {
   const clues = normalizeClues(raw);
   const budget = client.callBudget(CALL_WAIT_BUDGET_MS);
   let requests = 0;
@@ -236,14 +265,29 @@ export async function identifyComic(raw: RawClues, client: MetronClient): Promis
     getIssue: (id) => (requests++, client.getIssue(id, budget)),
     searchSeries: (params) => (requests++, client.searchSeries(params, budget)),
   };
+  const edition = editionEcho(raw, clues);
+  const echoed = edition ? { edition } : {};
   try {
     const match = clues.format === 'trade' ? await findTrade(clues, lookup) : await findSingleIssue(clues, lookup);
     const searched = requests > 0;
-    if (!match && !searched) return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched };
-    if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched };
-    return { ...(await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS)), searched };
+    if (!match && !searched) {
+      return { verdict: 'no_match', candidates: [], missing: missingFromClues(clues), searched, ...echoed };
+    }
+    if (!match) return { verdict: 'no_match', candidates: [], missing: [], searched, ...echoed };
+    const { judged, detail } = await judgeWithLeaderDetail(clues, lookup, match, requests < MAX_REQUESTS);
+    if (judged.verdict !== 'confirmed') return { ...judged, searched, ...echoed };
+    // A leader whose detail was not fetched gets one fetch for its cover, outside the request target; a failure
+    // there only leaves the variants unknown.
+    const coverDetail = detail ?? (await fetchDetail(client, judged.candidates[0].metronId));
+    const cover = await resolveCover(clues, coverDetail, client.getImage, coversDir);
+    return { ...judged, searched, cover, ...echoed };
   } catch (error) {
     if (error instanceof LookupFailed) return error.result;
     throw error;
   }
+}
+
+async function fetchDetail(client: MetronClient, id: number): Promise<MetronIssueDetail | undefined> {
+  const result = await client.getIssue(id);
+  return result.ok ? result.data : undefined;
 }

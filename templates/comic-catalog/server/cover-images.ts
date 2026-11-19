@@ -1,9 +1,10 @@
-// ABOUTME: Downloads the images of cover choices into a directory so the agent can compare them by eye.
+// ABOUTME: Settles an issue's cover and downloads the images of cover choices so the agent can compare them by eye.
 // ABOUTME: Files are named by the image URL's basename and reused when already present.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CoverChoice } from './cover';
-import type { MetronClient } from './metron-client';
+import type { Clues } from './clues';
+import { settleCover, type CoverChoice, type CoverResult } from './cover';
+import type { MetronClient, MetronIssueDetail } from './metron-client';
 
 function basenameOf(imageUrl: string): string {
   try {
@@ -11,6 +12,20 @@ function basenameOf(imageUrl: string): string {
   } catch {
     return '';
   }
+}
+
+// The cover of an issue for the clues read; with no detail the variants are unknown. A compare result gets its
+// images downloaded when a directory is given.
+export async function resolveCover(
+  clues: Clues,
+  detail: MetronIssueDetail | undefined,
+  getImage: MetronClient['getImage'],
+  coversDir?: string,
+): Promise<CoverResult> {
+  if (!detail) return { status: 'variants_unknown' };
+  const cover = settleCover(clues, detail);
+  if (cover.status !== 'compare' || !cover.choices || !coversDir) return cover;
+  return { ...cover, choices: await fetchCoverImages(cover.choices, getImage, coversDir) };
 }
 
 // Downloads one after another; a failed download leaves that choice without imagePath and never throws.

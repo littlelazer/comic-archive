@@ -1,6 +1,9 @@
 // ABOUTME: Tests identifyComic's failures and search cascade against a local stand-in Metron, plus pure helpers.
 // ABOUTME: Stand-in pages only steer the cascade logic; real identifications are tested in identify.live.test.ts.
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { identifyComic, judgeWithDetail, prefixHitStands, tradeTitle } from './identify';
 import { normalizeClues } from './clues';
 import { createMetronClient, type MetronIssueSummary } from './metron-client';
@@ -348,5 +351,94 @@ describe('trades across several series', () => {
     expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
     expect(result.candidates.map((c) => c.metronId)).toEqual([800]);
     expect(requests.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('covers in identify results', () => {
+  const variant = (name: string, upc: string, image: string | null = null) => ({
+    name,
+    price: null,
+    sku: '',
+    upc,
+    image,
+  });
+  const detailOf = (id: number, variants: ReturnType<typeof variant>[], upc = '') => {
+    const { issue: _issue, ...rest } = summary(id, 'The Thing');
+    return { ...rest, upc, isbn: '', price: null, variants, reprints: [] };
+  };
+  const READ = { series_title: 'The Thing', issue_number: '1', cover_year: 1983 };
+
+  function withDetail(detail: ReturnType<typeof detailOf> | undefined, search = [summary(7, 'The Thing')]) {
+    return standInMetron((url) => {
+      if (url.pathname.includes('/issue/7/')) {
+        return detail ? new Response(JSON.stringify(detail)) : new Response('', { status: 404 });
+      }
+      if (url.pathname.endsWith('/issue/')) return pageOf(search);
+      return new Response('', { status: 404 });
+    });
+  }
+
+  test('a confirmed exact barcode on a variant returns the cover settled by barcode', async () => {
+    const detail = detailOf(7, [variant('Newsstand', '75960620200300111')]);
+    const { client } = withDetail(detail);
+    const result = await identifyComic({ ...READ, upc_main: '759606202003', upc_addon: '00111' }, client);
+    expect(result).toMatchObject({
+      verdict: 'confirmed',
+      cover: { status: 'settled', settledBy: 'barcode', label: 'Newsstand' },
+    });
+  });
+
+  test('a probable verdict has no cover', async () => {
+    const { client } = withDetail(detailOf(7, [variant('Newsstand', '')]), [summary(7, 'The Thing'), summary(8, 'The Thing')]);
+    const result = await identifyComic(READ, client);
+    expect(result.verdict).not.toBe('confirmed');
+    expect(result).not.toHaveProperty('cover');
+  });
+
+  test('a confirmed match whose detail fetch fails has cover variants_unknown', async () => {
+    const { client } = standInMetron((url) => {
+      if (url.pathname.endsWith('/issue/')) return pageOf([summary(7, 'The Thing')]);
+      // Not found for the verdict's own fetch (stale result), then still unavailable for the cover's.
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic(READ, client);
+    expect(result).toMatchObject({ verdict: 'confirmed', cover: { status: 'variants_unknown' } });
+  });
+
+  test('a compare cover downloads its choices when a covers dir is given', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const images = Bun.serve({
+      port: 0,
+      fetch: () => new Response(png, { headers: { 'Content-Type': 'image/png' } }),
+    });
+    servers.push(images);
+    const base = `http://127.0.0.1:${images.port}`;
+    const detail = detailOf(7, [variant('A', '', `${base}/a.png`), variant('B', '', `${base}/b.png`)]);
+    const { client } = withDetail({ ...detail, image: `${base}/main.png` });
+    const dir = await mkdtemp(join(tmpdir(), 'identify-covers-'));
+    try {
+      const result = await identifyComic(READ, client, dir);
+      expect(result).toMatchObject({ verdict: 'confirmed', cover: { status: 'compare' } });
+      const choices = (result as { cover: { choices: { imagePath?: string }[] } }).cover.choices;
+      expect(choices.map((c) => c.imagePath)).toEqual([join(dir, 'main.png'), join(dir, 'a.png'), join(dir, 'b.png')]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('edition clues are echoed', async () => {
+    const { client } = withDetail(detailOf(7, []));
+    const result = await identifyComic(
+      { ...READ, edition: 'newsstand', variant_marking: 'Foil', printing: ' 2nd printing ' },
+      client,
+    );
+    expect(result).toMatchObject({
+      edition: { edition: 'newsstand', variantMarking: 'Foil', printing: '2nd printing' },
+    });
+  });
+
+  test('no edition field is returned when none of the clues were read', async () => {
+    const { client } = withDetail(detailOf(7, []));
+    expect(await identifyComic(READ, client)).not.toHaveProperty('edition');
   });
 });
