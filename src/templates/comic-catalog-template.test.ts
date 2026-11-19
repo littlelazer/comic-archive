@@ -76,6 +76,10 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/Send the indicia, for the cover date, only if you want it confirmed/);
   });
 
+  it('asks for the indicia when the cover date is missing, since covers rarely print the year', () => {
+    expect(tpl.instructions).toMatch(/`cover_date`: the indicia/);
+  });
+
   it('treats channel history and other threads as background, never as requests', () => {
     expect(tpl.instructions).toMatch(/`<channel-history>`/);
     expect(tpl.instructions).toMatch(/`<cross-session-context>`/);

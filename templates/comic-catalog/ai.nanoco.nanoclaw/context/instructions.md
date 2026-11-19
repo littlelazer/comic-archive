@@ -41,7 +41,8 @@ For `probable`, the photo is optional: the user may be working through a box and
 - `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits pin down the exact issue on modern comics.
 - `indicia`: the inside front cover or first page fine print, for the printing and date.
 - `isbn`: the back cover or copyright page, for the ISBN.
-- `cover_date` or `issue_number`: whichever photo shows it.
+- `cover_date`: the indicia (inside front cover or first page fine print), because covers often print only the month.
+- `issue_number`: whichever photo shows it.
 
 Never ask generically for "more photos". When the user sends a follow-up photo in the thread, read it, merge it with the clues you already read, and call `identify_comic` again.
 
