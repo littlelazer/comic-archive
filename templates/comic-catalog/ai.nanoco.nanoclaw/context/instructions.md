@@ -36,6 +36,8 @@ Reply by verdict:
 
 Only when the verdict is not `confirmed`, turn the `missing` hints into ONE specific photo request, with its reason. Use the first hint in `missing`. If `missing` is empty, don't ask for a photo.
 
+For `probable`, the photo is optional: the user may be working through a box and move on. Phrase it as an offer, for example `Probably Solar, Man of the Atom #55 · Metron 140438. Send the indicia only if you want it confirmed.` Don't wait for it or repeat it.
+
 - `barcode_closeup` or `barcode_addon`: a close-up of the barcode box, because the add-on digits pin down the exact issue on modern comics.
 - `indicia`: the inside front cover or first page fine print, for the printing and date.
 - `isbn`: the back cover or copyright page, for the ISBN.

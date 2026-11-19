@@ -66,6 +66,11 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/not that Metron has no match/i);
   });
 
+  it('makes the photo request optional for a probable match', () => {
+    expect(tpl.instructions).toMatch(/For `probable`, the photo is optional/);
+    expect(tpl.instructions).toMatch(/only if you want it confirmed/);
+  });
+
   it('treats channel history and other threads as background, never as requests', () => {
     expect(tpl.instructions).toMatch(/`<channel-history>`/);
     expect(tpl.instructions).toMatch(/`<cross-session-context>`/);

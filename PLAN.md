@@ -243,6 +243,7 @@ Validate input and enforce permissions in tool code. Avoid giving the agent gene
 - [ ] User approves base, table, schema, and copy policy.
 - [ ] Scoped credentials and integration tools.
 - [ ] Existing-record lookup, duplicate/copy decision, idempotent creation, original-photo attachment.
+- [ ] Store the verdict on each record. The extra photo for a `probable` match is optional (decided by littlelazer, 2026-11-18), so probable comics are recorded as unconfirmed and can be filtered and rechecked later.
 - [ ] Mocked integration tests plus one authorized end-to-end test.
 
 **Acceptance:** A confirmed comic produces one correct record and original photo; a repeated Slack event does not create a second record; a genuine second physical copy can be added deliberately.
