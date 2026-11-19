@@ -161,6 +161,37 @@ describe('decideVerdict', () => {
     expect(result.verdict).toBe('confirmed');
   });
 
+  test('confirms a barcode-prefix match on series, number and month when the cover shows no year', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7, upcMain: '071486029661' }),
+      issues: [detail({ upc: '07148602966107' })],
+      totalCount: 1,
+      matchedBy: 'upc_prefix',
+    });
+    expect(result.verdict).toBe('confirmed');
+    expect(result.missing).toEqual([]);
+  });
+
+  test('does not confirm a month-only cover without a barcode-prefix match', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 }),
+      issues: [summary()],
+      totalCount: 1,
+      matchedBy: 'series_number',
+    });
+    expect(result.verdict).toBe('probable');
+  });
+
+  test('does not confirm a barcode-prefix match with no year and no month read', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', upcMain: '071486029661' }),
+      issues: [detail({ upc: '07148602966107' })],
+      totalCount: 1,
+      matchedBy: 'upc_prefix',
+    });
+    expect(result.verdict).toBe('probable');
+  });
+
   test('is ambiguous with two equally fitting volumes and no year', () => {
     const second = summary({ id: 99, series: { id: 2000, name: 'The Thing', volume: 2, year_began: 2005 }, cover_date: '2005-01-01' });
     const result = decideVerdict({

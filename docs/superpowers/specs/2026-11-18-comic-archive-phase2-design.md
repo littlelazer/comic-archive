@@ -116,7 +116,7 @@ No ISBN search exists. Search series with `series_type` matching trade/hardcover
 
 ### Verdict rules (initial; documented in code next to the tests)
 
-- **confirmed**: exactly one candidate survives, and either (a) a full modern barcode matched exactly and nothing read conflicts, or (b) series, issue number and cover year all agree (cover month too, when read) with no conflicting clue; for trades, the ISBN matched.
+- **confirmed**: exactly one candidate survives, and either (a) a full modern barcode matched exactly and nothing read conflicts, or (b) series, issue number and cover year all agree (cover month too, when read) with no conflicting clue, or (c) no cover year was read, a barcode-prefix search found the issue, and series, issue number and cover month all agree (many covers print only the month; added after the first checklist run); for trades, the ISBN matched.
 - **probable**: one leading candidate, but a key clue is missing or unreadable (e.g. no year, barcode cut off).
 - **ambiguous**: two or more candidates fit equally (e.g. same title across volumes, no year).
 - **no_match**: Metron returned nothing that fits; report what was read.
