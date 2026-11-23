@@ -35,3 +35,7 @@ A late tap on expired buttons never reaches the agent; that is expected (see `ar
 | 2026-11-22 | 4 · Button timeout | Not run | Needs post 3 to ask with buttons. |
 | 2026-11-22 | 5 · Flash #279 newsstand | Fail | Agent sent no barcode or `edition`; reply had no `newsstand`. Instructions fixed: read any visible barcode, always send `edition` when the barcode box is visible. |
 | 2026-11-22 | 6 · Phase 2 regression | Pass | Avengers #329 and Solar #55 `probable` with the optional photo offer; Legacy named the Image candidates and their publisher conflict. |
+| 2026-11-22 | 5 · Flash #279 newsstand (re-run) | Pass | Confirmed on month alone, `edition: newsstand` sent, reply ends `· newsstand`. |
+| 2026-11-22 | 2 · Youngblood #0 (re-run) | Pass, limited | Confirmed Metron 170612 (month-only rule). Metron lists no variants for #0, so the cover is `only_cover` and two physical covers can't be told apart from Metron data. The same photo was posted twice; the second cover was not re-posted. |
+| 2026-11-22 | 3 · The Thing #1 (re-run) | Fail | `ambiguous` with 4 candidates, 2 conflict-free (1983, 2025, both July). The 2–3 limit counted all candidates, so no buttons; the reply also guessed the 1983 issue. Fixed: buttons for 2–3 conflict-free candidates only; never guess. |
+| 2026-11-22 | 1 · Variant, barcode visible | Not run | littlelazer had no such variant to hand; left open. Code covered by `cover.live.test.ts` (Absolute Batman #1, 10th Printing). |

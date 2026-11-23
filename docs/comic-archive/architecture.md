@@ -69,7 +69,7 @@ They run only on a `confirmed` result (from `identify_comic` or `confirm_choice`
 4. **Tap.** If the agent can't tell, or a choice has no image, it asks with `ask_user_question`, one button per choice, and settles the tap with `confirm_choice` (`settledBy: 'user'`).
 5. **Too many.** More than 6 left gives `not_determined`, with a barcode hint when the add-on would help.
 
-An issue with no variants is `only_cover`. `ambiguous` results with 2–3 candidates are also asked with buttons, one per issue; the tapped Metron ID goes through `confirm_choice`, which re-checks the clues (a conflict comes back `probable`) and runs the cover steps. A chosen cover label must be one Metron lists for that issue.
+An issue with no variants is `only_cover`. `ambiguous` results with 2–3 conflict-free candidates are also asked with buttons, one per such issue (candidates with conflicts are left out); the tapped Metron ID goes through `confirm_choice`, which re-checks the clues (a conflict comes back `probable`) and runs the cover steps. A chosen cover label must be one Metron lists for that issue.
 
 ### Limits of the buttons
 

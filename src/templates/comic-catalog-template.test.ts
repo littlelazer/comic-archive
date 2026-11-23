@@ -104,10 +104,13 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/`compared by eye`/);
   });
 
-  it('asks with NanoClaw buttons, one per remaining cover or up to 3 issues', () => {
+  it('asks with NanoClaw buttons, one per remaining cover or per conflict-free issue', () => {
     expect(tpl.instructions).toMatch(/`mcp__nanoclaw__ask_user_question`/);
     expect(tpl.instructions).toMatch(/one button per remaining choice, labeled with its `label`/);
-    expect(tpl.instructions).toMatch(/`ambiguous` with 2–3 candidates, use up to 3 issue buttons/);
+    expect(tpl.instructions).toMatch(
+      /`ambiguous` with 2–3 candidates whose `conflicts` are empty, use one issue button per such candidate/,
+    );
+    expect(tpl.instructions).toMatch(/Leave out candidates with conflicts/);
   });
 
   it('numbers the choices so a later reply with a number is unambiguous', () => {
@@ -187,10 +190,14 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/try again or resend the photo/);
   });
 
-  it('replies to an ambiguous result with 2–3 candidates by asking with buttons, not in text', () => {
+  it('replies to an ambiguous result with 2–3 conflict-free candidates by asking with buttons, not in text', () => {
     expect(tpl.instructions).toMatch(
-      /`ambiguous` with 2–3 candidates: ask with issue buttons \(see "Choosing with buttons"\) instead of a text reply/,
+      /`ambiguous` with 2–3 candidates whose `conflicts` are empty: ask with issue buttons for just those candidates \(see "Choosing with buttons"\) instead of a text reply/,
     );
+  });
+
+  it('never guesses which candidate is right in a reply', () => {
+    expect(tpl.instructions).toMatch(/Never guess which candidate is right/);
   });
 
   it('cites only evidence and conflicts the tool returned', () => {
