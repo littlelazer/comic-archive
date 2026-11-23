@@ -187,6 +187,21 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/try again or resend the photo/);
   });
 
+  it('replies to an ambiguous result with 2–3 candidates by asking with buttons, not in text', () => {
+    expect(tpl.instructions).toMatch(
+      /`ambiguous` with 2–3 candidates: ask with issue buttons \(see "Choosing with buttons"\) instead of a text reply/,
+    );
+  });
+
+  it('cites only evidence and conflicts the tool returned', () => {
+    expect(tpl.instructions).toMatch(/Cite only what is in a candidate's `evidence` or `conflicts`/);
+  });
+
+  it('reads any visible barcode and passes the edition', () => {
+    expect(tpl.instructions).toMatch(/If a barcode is visible anywhere on the cover, read its digits/);
+    expect(tpl.instructions).toMatch(/always send `edition`/);
+  });
+
   it('shortens button labels over 70 characters but keeps the full label as the value', () => {
     expect(tpl.instructions).toMatch(/longer than 70 characters/);
     expect(tpl.instructions).toMatch(/full choice label as the button value/);

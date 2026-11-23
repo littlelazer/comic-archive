@@ -145,9 +145,10 @@ function meetsConfirmCondition(clues: Clues, matchedBy: MatchInput['matchedBy'],
   if (clues.format === 'trade') return a.isbnMatches;
   if (matchedBy === 'upc_exact') return true;
   const monthOk = clues.coverMonth === undefined || a.monthAgrees;
-  // Many covers print only the month. A barcode body names the series, so with series, number and month
-  // agreeing the year is not needed.
-  const yearOk = a.yearAgrees || (clues.coverYear === undefined && matchedBy === 'upc_prefix' && a.monthAgrees);
+  // Most covers print only the month. With no year read, series, number and month agreeing is enough: a
+  // same-numbered issue from another volume with the same month is also conflict-free, which makes the
+  // result ambiguous rather than confirmed.
+  const yearOk = a.yearAgrees || (clues.coverYear === undefined && a.monthAgrees);
   return a.seriesAgrees && a.numberAgrees && yearOk && monthOk;
 }
 
@@ -182,8 +183,8 @@ export function missingFromClues(clues: Clues): MissingHint[] {
 //   candidates have no conflicting clue.
 // - confirmed: exactly one candidate has no conflicting clue, and either (a) the search matched a full modern
 //   barcode exactly (matchedBy 'upc_exact'), or (b) series, issue number and cover year all agree (cover month
-//   too, when read), or (c) with no cover year read, a barcode-prefix search (matchedBy 'upc_prefix') found it
-//   and series, issue number and cover month all agree. For format 'trade' only a matching ISBN confirms;
+//   too, when read), or (c) with no cover year read, series, issue number and cover month all agree (decided
+//   by littlelazer: most covers print no year). For format 'trade' only a matching ISBN confirms;
 //   nothing else does.
 // - probable: anything else with at least one candidate, including when every candidate has a conflict.
 // - Any conflict between a read clue and a candidate (e.g. a different issue number) prevents confirmed.

@@ -29,3 +29,9 @@ A late tap on expired buttons never reaches the agent; that is expected (see `ar
 
 | Date | Post | Pass/fail | Notes |
 | --- | --- | --- | --- |
+| 2026-11-22 | 1 · Variant, barcode visible | Not run | No post yet. |
+| 2026-11-22 | 2 · Youngblood #0, two covers, no barcode | Fail | Both `probable` (cover prints only "DEC"), so no cover steps ran. Fixed by confirming month-only covers on series, number and month (decided by littlelazer). |
+| 2026-11-22 | 3 · The Thing #1 | Fail | `ambiguous` with 3 candidates, but the agent replied in text, no buttons, and claimed a barcode match the result did not list. Instructions fixed: ambiguous with 2–3 candidates asks with buttons; cite only returned evidence. |
+| 2026-11-22 | 4 · Button timeout | Not run | Needs post 3 to ask with buttons. |
+| 2026-11-22 | 5 · Flash #279 newsstand | Fail | Agent sent no barcode or `edition`; reply had no `newsstand`. Instructions fixed: read any visible barcode, always send `edition` when the barcode box is visible. |
+| 2026-11-22 | 6 · Phase 2 regression | Pass | Avengers #329 and Solar #55 `probable` with the optional photo offer; Legacy named the Image candidates and their publisher conflict. |

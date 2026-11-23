@@ -33,7 +33,7 @@ function countingClient(client: MetronClient) {
 
 describe.skipIf(!process.env.HTTPS_PROXY)('cover steps against real Metron', () => {
   const { client, counter } = countingClient(
-    createMetronClient({ baseUrl: METRON_BASE_URL, userAgent: 'comic-archive/0.3.0' }),
+    createMetronClient({ baseUrl: METRON_BASE_URL, userAgent: 'comic-archive/0.3.1' }),
   );
 
   beforeAll(() => {

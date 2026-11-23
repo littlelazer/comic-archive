@@ -172,14 +172,58 @@ describe('decideVerdict', () => {
     expect(result.missing).toEqual([]);
   });
 
-  test('does not confirm a month-only cover without a barcode-prefix match', () => {
+  test('confirms a month-only cover on series, number and month without a barcode', () => {
     const result = decideVerdict({
       clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 }),
       issues: [summary()],
       totalCount: 1,
       matchedBy: 'series_number',
     });
+    expect(result.verdict).toBe('confirmed');
+    expect(result.missing).toEqual([]);
+  });
+
+  test('is ambiguous for a month-only cover when two volumes share the month', () => {
+    const later = summary({ id: 145418, series: { id: 9000, name: 'The Thing', volume: 4, year_began: 2025 }, cover_date: '2025-07-01' });
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 }),
+      issues: [summary(), later],
+      totalCount: 2,
+      matchedBy: 'series_number',
+    });
+    expect(result.verdict).toBe('ambiguous');
+  });
+
+  test('confirms a month-only cover when the other volume has a different month', () => {
+    const later = summary({ id: 13842, series: { id: 2000, name: 'The Thing', volume: 2, year_began: 2006 }, cover_date: '2006-01-01' });
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 }),
+      issues: [summary(), later],
+      totalCount: 2,
+      matchedBy: 'series_number',
+    });
+    expect(result.verdict).toBe('confirmed');
+    expect(result.candidates[0].metronId).toBe(13806);
+  });
+
+  test('does not confirm a cover with no year and no month on series and number alone', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1' }),
+      issues: [summary()],
+      totalCount: 1,
+      matchedBy: 'series_number',
+    });
     expect(result.verdict).toBe('probable');
+  });
+
+  test('does not confirm a month-only cover when Metron has more matches than were returned', () => {
+    const result = decideVerdict({
+      clues: clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 }),
+      issues: [summary()],
+      totalCount: 3,
+      matchedBy: 'series_number',
+    });
+    expect(result.verdict).toBe('ambiguous');
   });
 
   test('does not confirm a barcode-prefix match with no year and no month read', () => {
