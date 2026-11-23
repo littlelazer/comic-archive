@@ -35,6 +35,7 @@ The template is stamped into a group with `ncl groups create --template comic-ca
 | No per-group tool restriction; all agents run `bypassPermissions` with Bash | Agent instructions cannot be the write-authorization boundary | Enforce in MCP tool code and gateway grants (Phase 4) |
 | Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Metron: no prompt on a granted secret (verified). Recheck for Airtable writes |
 | Metron credential via OneCLI | Resolved | API token as a generic secret (`metron`, host `metron.cloud`, path `/api/*`, `Authorization: Bearer {value}`), granted to ComicCatalog only. Verified with `onecli run --agent <ComicCatalog identifier> -- curl …` |
+| Slack Interactivity is off in Socket Mode (upstream `/add-slack` Socket Mode steps never enable it; `src/provisioning/slack-app.ts` sets `interactivity.is_enabled: false`) | `ask_user_question` taps never reach NanoClaw | littlelazer turns on Interactivity & Shortcuts in the Slack app (no Request URL needed in Socket Mode); consider an upstream issue |
 | Pre-2000s UPCs identify the series, not the issue (issue is in the add-on digits) | `upc_starts_with` returns many issues, and Metron lacks UPCs for some | Use UPC to narrow the series, then `series_name` + `number` (+ `cover_year`); never accept a UPC hit alone |
 
 ## Metron lookup
@@ -69,7 +70,7 @@ They run only on a `confirmed` result (from `identify_comic` or `confirm_choice`
 4. **Tap.** If the agent can't tell, or a choice has no image, it asks with `ask_user_question`, one button per choice, and settles the tap with `confirm_choice` (`settledBy: 'user'`).
 5. **Too many.** More than 6 left gives `not_determined`, with a barcode hint when the add-on would help.
 
-An issue with no variants is `only_cover`. `ambiguous` results with 2–3 conflict-free candidates are also asked with buttons, one per such issue (candidates with conflicts are left out); the tapped Metron ID goes through `confirm_choice`, which re-checks the clues (a conflict comes back `probable`) and runs the cover steps. A chosen cover label must be one Metron lists for that issue.
+An issue with no variants is `only_cover`. `ambiguous` results with 2–3 conflict-free candidates, when Metron returned every match, carry numbered `choices` (candidates with conflicts are left out), and the agent asks with one button per choice; the tapped Metron ID goes through `confirm_choice`, which re-checks the clues (a conflict comes back `probable`) and runs the cover steps. A chosen cover label must be one Metron lists for that issue.
 
 ### Limits of the buttons
 

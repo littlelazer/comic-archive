@@ -107,10 +107,8 @@ describe('comic-catalog template', () => {
   it('asks with NanoClaw buttons, one per remaining cover or per conflict-free issue', () => {
     expect(tpl.instructions).toMatch(/`mcp__nanoclaw__ask_user_question`/);
     expect(tpl.instructions).toMatch(/one button per remaining choice, labeled with its `label`/);
-    expect(tpl.instructions).toMatch(
-      /`ambiguous` with 2–3 candidates whose `conflicts` are empty, use one issue button per such candidate/,
-    );
-    expect(tpl.instructions).toMatch(/Leave out candidates with conflicts/);
+    expect(tpl.instructions).toMatch(/when the result has `choices`, use one issue button per choice/);
+    expect(tpl.instructions).toMatch(/labeled with its `label`, with its `metronId` as the value/);
   });
 
   it('numbers the choices so a later reply with a number is unambiguous', () => {
@@ -190,10 +188,19 @@ describe('comic-catalog template', () => {
     expect(tpl.instructions).toMatch(/try again or resend the photo/);
   });
 
-  it('replies to an ambiguous result with 2–3 conflict-free candidates by asking with buttons, not in text', () => {
+  it('replies to an ambiguous result with choices by asking with buttons, not in text', () => {
     expect(tpl.instructions).toMatch(
-      /`ambiguous` with 2–3 candidates whose `conflicts` are empty: ask with issue buttons for just those candidates \(see "Choosing with buttons"\) instead of a text reply/,
+      /`ambiguous` with `choices`: ask with issue buttons \(see "Choosing with buttons"\) instead of a text reply/,
     );
+  });
+
+  it('sends a cover year only when one is printed on the photo', () => {
+    expect(tpl.instructions).toMatch(/Send `cover_year` only when a year is printed on the photo/);
+    expect(tpl.instructions).toMatch(/never take one from an example, a Metron result or an earlier message/);
+  });
+
+  it('gives no example reply naming a real comic with a cover date', () => {
+    expect(tpl.instructions).not.toMatch(/The Thing \(1983\) #1 · Metron 13806/);
   });
 
   it('never guesses which candidate is right in a reply', () => {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "comic-catalog",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Identifies comic-book covers sent as Slack photos and catalogs owned copies.",
   "extensions": {
     "ai.nanoco.nanoclaw": {

@@ -291,6 +291,23 @@ describe('what was searched', () => {
   });
 });
 
+describe('issue choices in identify results', () => {
+  test('an ambiguous month-only cover returns numbered choices for the conflict-free volumes', async () => {
+    const later = { ...summary(2, 'The Thing'), series: { id: 20, name: 'The Thing', volume: 4, year_began: 2025 }, cover_date: '2025-07-01' };
+    const { client } = standInMetron((url) => {
+      if (url.searchParams.has('series_name')) return pageOf([summary(1, 'The Thing'), later]);
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic({ series_title: 'The Thing', issue_number: '1', cover_month: 7 }, client);
+    expect(result).toMatchObject({ verdict: 'ambiguous', searched: true });
+    if (result.verdict === 'lookup_failed') throw new Error('unexpected lookup failure');
+    expect(result.choices?.map((c) => [c.number, c.label, c.metronId])).toEqual([
+      [1, 'The Thing (1983) #1', 1],
+      [2, 'The Thing (2025) #1', 2],
+    ]);
+  });
+});
+
 describe('trade series names', () => {
   test.each([
     ['Batman TPB (2022)', 'Batman'],

@@ -249,6 +249,55 @@ describe('decideVerdict', () => {
     expect(result.candidates).toHaveLength(2);
   });
 
+  describe('choices', () => {
+    const later = summary({ id: 145418, series: { id: 9000, name: 'The Thing', volume: 4, year_began: 2025 }, cover_date: '2025-07-01', image: null });
+    const january = summary({ id: 13842, series: { id: 2000, name: 'The Thing', volume: 2, year_began: 2006 }, cover_date: '2006-01-01' });
+    const julyClues = clues({ seriesTitle: 'The Thing', issueNumber: '1', coverMonth: 7 });
+
+    test('numbers the conflict-free candidates of an ambiguous result and leaves out those with conflicts', () => {
+      const result = decideVerdict({ clues: julyClues, issues: [january, summary(), later], totalCount: 3, matchedBy: 'series_number' });
+      expect(result.verdict).toBe('ambiguous');
+      expect(result.choices).toEqual([
+        {
+          number: 1,
+          label: 'The Thing (1983) #1',
+          metronId: 13806,
+          reason: 'series matches, issue number matches, cover month matches',
+          imageUrl: 'https://static.metron.cloud/media/issue/2020/06/12/thing-v1-1.jpg',
+        },
+        {
+          number: 2,
+          label: 'The Thing (2025) #1',
+          metronId: 145418,
+          reason: 'series matches, issue number matches, cover month matches',
+          imageUrl: null,
+        },
+      ]);
+    });
+
+    test('gives no choices when more than 3 candidates are conflict-free', () => {
+      const issues = [1, 2, 3, 4].map((n) =>
+        summary({ id: n, series: { id: n, name: 'The Thing', volume: n, year_began: 1980 + n }, cover_date: `${1980 + n}-07-01` }),
+      );
+      const result = decideVerdict({ clues: julyClues, issues, totalCount: 4, matchedBy: 'series_number' });
+      expect(result.verdict).toBe('ambiguous');
+      expect(result.choices).toBeUndefined();
+    });
+
+    test('gives no choices when Metron has matches that were not returned', () => {
+      const result = decideVerdict({ clues: julyClues, issues: [summary(), later], totalCount: 7, matchedBy: 'series_number' });
+      expect(result.verdict).toBe('ambiguous');
+      expect(result.choices).toBeUndefined();
+    });
+
+    test('gives no choices on a confirmed or probable result', () => {
+      expect(decideVerdict({ clues: julyClues, issues: [summary()], totalCount: 1, matchedBy: 'series_number' }).choices).toBeUndefined();
+      const probable = decideVerdict({ clues: clues({ seriesTitle: 'The Thing', issueNumber: '1' }), issues: [summary()], totalCount: 1, matchedBy: 'series_number' });
+      expect(probable.verdict).toBe('probable');
+      expect(probable.choices).toBeUndefined();
+    });
+  });
+
   test('confirmOnlyId lets only that candidate confirm; another sole fit is probable with the usual hints', () => {
     const input = {
       clues: clues({ ...TITLE_NUMBER_YEAR, upcMain: '071486029663' }),

@@ -16,6 +16,7 @@ import {
   missingFromClues,
   normalizeTitle,
   type Candidate,
+  type IssueChoice,
   type MatchInput,
   type MissingHint,
   type Verdict,
@@ -34,6 +35,7 @@ export type LookupFailure = {
 
 // searched is false when the clues were too thin to make any Metron search, so no_match then says nothing
 // about what Metron has.
+// choices is set only on an ambiguous verdict with 2–3 conflict-free candidates.
 // cover is set only on a confirmed verdict. edition echoes the edition, variant marking and printing clues read.
 export type IdentifyResult =
   | {
@@ -43,6 +45,7 @@ export type IdentifyResult =
       searched: boolean;
       cover?: CoverResult;
       edition?: EditionEcho;
+      choices?: IssueChoice[];
       chosenBy?: 'user';
     }
   | LookupFailure;

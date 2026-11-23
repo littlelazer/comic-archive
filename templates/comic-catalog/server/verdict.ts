@@ -21,6 +21,15 @@ export interface Candidate {
   isReprintOrFacsimile: boolean;
 }
 
+// One numbered issue to offer as a button, in the order the buttons and the numbered list use.
+export interface IssueChoice {
+  number: number;
+  label: string;
+  metronId: number;
+  reason: string;
+  imageUrl: string | null;
+}
+
 export interface MatchInput {
   clues: Clues;
   issues: (MetronIssueSummary | MetronIssueDetail)[];
@@ -33,6 +42,7 @@ export interface MatchInput {
 type MetronIssue = MetronIssueSummary | MetronIssueDetail;
 
 const MAX_CANDIDATES = 5;
+const MAX_CHOICES = 3;
 const BARCODE_BODY_LENGTH = 11;
 const FIRST_BARCODE_YEAR = 1977;
 // Metron stores 2-digit add-ons for 1983 covers (The Thing #1 is 11 digits plus 2) and 5-digit ones for
@@ -195,11 +205,28 @@ export function missingFromClues(clues: Clues): MissingHint[] {
 //   has no mark is not a conflict; it only sets isReprintOrFacsimile.
 // - With confirmOnlyId set, a sole conflict-free candidate with any other id is probable, not confirmed.
 // - Candidates are ranked by fewest conflicts, then most evidence, then Metron's order, and capped at 5.
+// - choices (only when ambiguous): the 2–3 conflict-free candidates, numbered, when Metron returned every match.
+//   The user picks one with buttons; candidates with conflicts are left out.
 // - missing (only when not confirmed): title (no series title was read), issue_number, cover_date, then
 //   barcode_closeup (no barcode read and the cover year is 1977 or later or unknown) / barcode_addon (main
 //   read, add-on not) for single issues or isbn for trades, then indicia when a listed candidate has a
 //   printing conflict or the top candidate has variantOrPrintingUndetermined.
-export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates: Candidate[]; missing: MissingHint[] } {
+function issueChoices(conflictFree: Assessment[]): IssueChoice[] {
+  return conflictFree.map(({ candidate }, i) => ({
+    number: i + 1,
+    label: `${candidate.series} (${candidate.yearBegan}) #${candidate.number}`,
+    metronId: candidate.metronId,
+    reason: candidate.evidence.join(', '),
+    imageUrl: candidate.coverImageUrl,
+  }));
+}
+
+export function decideVerdict(input: MatchInput): {
+  verdict: Verdict;
+  candidates: Candidate[];
+  missing: MissingHint[];
+  choices?: IssueChoice[];
+} {
   const { clues, issues, totalCount, matchedBy, confirmOnlyId } = input;
   if (issues.length === 0) {
     return totalCount > 0
@@ -231,5 +258,15 @@ export function decideVerdict(input: MatchInput): { verdict: Verdict; candidates
     verdict = 'confirmed';
   }
 
-  return { verdict, candidates, missing: verdict === 'confirmed' ? [] : missingHints(clues, ranked) };
+  const offerChoices =
+    verdict === 'ambiguous' &&
+    totalCount <= issues.length &&
+    conflictFree.length >= 2 &&
+    conflictFree.length <= MAX_CHOICES;
+  return {
+    verdict,
+    candidates,
+    missing: verdict === 'confirmed' ? [] : missingHints(clues, ranked),
+    ...(offerChoices && { choices: issueChoices(conflictFree) }),
+  };
 }
