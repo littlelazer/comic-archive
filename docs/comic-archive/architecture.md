@@ -47,6 +47,7 @@ Findings that shape `identify_comic`:
 - `upc_starts_with` takes 11 digits.
 - Some issues (for example 13806) have no barcode in Metron, so a barcode miss is not a no-match.
 - Trades: there is no ISBN search. A multi-type `series_type_id` returns 400, so the lookup runs a TPB search, then one unfiltered title search keeping Hardcover and Omnibus.
+- `series_name` matches substrings, so a common word ("Thing") also finds Swamp Thing, Man-Thing and more (107 #1 issues, 100 per page). When one more page completes the search, it is fetched, within the 5-request target, so the exact-title issues are every match and an ambiguous result can offer `choices`.
 - A 60 s total wait budget applies per lookup; beyond it the tool returns `lookup_failed`.
 - The printed publisher is not matched against Metron's: names change across eras (Solar, Man of the Atom #55 reads "Acclaim Comics", Metron lists "Valiant"). So a comic from a publisher Metron lacks can come back `ambiguous` rather than `no_match` when Metron has a same-titled series.
 

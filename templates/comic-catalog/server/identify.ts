@@ -141,6 +141,19 @@ export function prefixHitStands(clues: Clues, hits: MetronIssueSummary[]): boole
   return hits.some((issue) => normalizeTitle(issue.series.name) === wanted);
 }
 
+// A common word ("Thing") matches other titles too and can run just past one page. The second page is fetched
+// only when it completes the search, so the narrowed issues are every match and the verdict can offer choices.
+async function completeWithSecondPage(
+  client: Lookup,
+  params: Record<string, string>,
+  first: MetronPage<MetronIssueSummary>,
+): Promise<MetronPage<MetronIssueSummary>> {
+  const pageSize = first.results.length;
+  if (first.count <= pageSize || first.count > 2 * pageSize) return first;
+  const second = await searchIssues(client, { ...params, page: '2' });
+  return { count: first.count, next: second.next, results: [...first.results, ...second.results] };
+}
+
 async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | undefined> {
   // The add-on is not read as an issue number: on old barcodes it is the cover month, and modern add-ons are
   // covered by the exact UPC lookup.
@@ -181,7 +194,8 @@ async function findSingleIssue(clues: Clues, client: Lookup): Promise<Found | un
 
   if (!clues.seriesTitle) return undefined;
   const title = clues.seriesTitle;
-  const page = await searchIssues(client, { series_name: searchTitle(title), ...number, ...year });
+  const titleQuery = { series_name: searchTitle(title), ...number, ...year };
+  const page = await completeWithSecondPage(client, titleQuery, await searchIssues(client, titleQuery));
   // A title that finds nothing may be misread, so barcode hits rejected for disagreeing with it are kept;
   // upc_prefix cannot confirm without series, number and year agreeing, so this is at best probable.
   if (page.results.length === 0 && prefixPage && prefixPage.results.length > 0) return found(prefixPage, 'upc_prefix');

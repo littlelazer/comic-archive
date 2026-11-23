@@ -40,7 +40,7 @@ describe('serveStdio', () => {
     expect(reply.id).toBe(1);
     expect(reply.result.protocolVersion).toBe('2025-03-26');
     expect(reply.result.capabilities).toEqual({ tools: {} });
-    expect(reply.result.serverInfo).toEqual({ name: 'comic-catalog', version: '0.3.2' });
+    expect(reply.result.serverInfo).toEqual({ name: 'comic-catalog', version: '0.3.3' });
   });
 
   test('lists tools with name, description and inputSchema', async () => {

@@ -5,7 +5,7 @@ import { METRON_BASE_URL, createMetronClient } from './metron-client';
 import { serveStdio } from './mcp-stdio';
 import { confirmChoiceTool, getComicTool, identifyComicTool } from './tools';
 
-const client = createMetronClient({ baseUrl: METRON_BASE_URL, userAgent: 'comic-archive/0.3.2' });
+const client = createMetronClient({ baseUrl: METRON_BASE_URL, userAgent: 'comic-archive/0.3.3' });
 
 const coversDir = process.env.PLUGIN_DATA ? join(process.env.PLUGIN_DATA, 'covers') : undefined;
 

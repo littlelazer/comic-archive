@@ -16,9 +16,12 @@ import { METRON_BASE_URL, createMetronClient, type MetronClient } from './metron
 //   177188, whose detail has isbn 9781643375434.
 // - Same title across volumes: `issue/?series_name=thor&number=1` has count 113 over more than one page,
 //   including Thor (1998), (2007), (2014), (2018), (2020) and (2025) #1.
+// - Month-only cover: `issue/?series_name=Thing&number=1` has count 107 with 100 per page (2026-11-23); The Thing
+//   (1983) #1 and The Thing (2025) #1 (145418) are both July issues.
 // - Hardcover trade: the same Thor search listed 188699, "Superman: The Last Days of Lex Luthor HC (2025) #1",
 //   alongside the 2023 limited series of that title.
 const THE_THING_1 = 13806;
+const THE_THING_2025_1 = 145418;
 const THE_THING_BARCODE = '071486029663';
 const ASM_2022_1 = 44879;
 const ALICE_TPB_1 = 177188;
@@ -176,6 +179,22 @@ describe.skipIf(!process.env.HTTPS_PROXY)('identifyComic against real Metron', (
       expect(result.verdict).not.toBe('lookup_failed');
       expect(counter.requests).toBeGreaterThan(0);
       expect(counter.requests).toBeLessThanOrEqual(4);
+    },
+    LIVE_TIMEOUT_MS,
+  );
+
+  test(
+    'live: a month-only The Thing #1 cover offers the 1983 and 2025 issues as choices, the page beyond included',
+    async () => {
+      const counted = countingClient(client);
+      const result = await identifyComic(
+        { series_title: 'The Thing', issue_number: '1', cover_month: 7, upc_main: THE_THING_BARCODE.slice(0, 11) + '0', upc_addon: '07' },
+        counted.client,
+      );
+      if (result.verdict === 'lookup_failed') throw new Error(`lookup failed: ${result.reason}`);
+      expect(result.verdict).toBe('ambiguous');
+      expect(result.choices?.map((c) => c.metronId)).toEqual([THE_THING_1, THE_THING_2025_1]);
+      expect(counted.counter.requests).toBeLessThanOrEqual(5);
     },
     LIVE_TIMEOUT_MS,
   );

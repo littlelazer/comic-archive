@@ -308,6 +308,56 @@ describe('issue choices in identify results', () => {
   });
 });
 
+describe('title search across two pages', () => {
+  const thing = (id: number, year: number, month: string) => ({
+    ...summary(id, 'The Thing'),
+    series: { id: id * 10, name: 'The Thing', volume: id, year_began: year },
+    cover_date: `${year}-${month}-01`,
+  });
+  const other = (id: number) => summary(id, 'Swamp Thing');
+
+  test('fetches the second page when it completes the search, so the choices are offered', async () => {
+    const { client, requests } = standInMetron((url) => {
+      if (url.searchParams.has('series_name')) {
+        return url.searchParams.get('page') === '2'
+          ? pageOf([other(9)], 3)
+          : pageOf([thing(1, 1983, '07'), thing(2, 2025, '07')], 3);
+      }
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic({ series_title: 'The Thing', issue_number: '1', cover_month: 7 }, client);
+    if (result.verdict === 'lookup_failed') throw new Error('unexpected lookup failure');
+    expect(result.verdict).toBe('ambiguous');
+    expect(result.choices?.map((c) => c.metronId)).toEqual([1, 2]);
+    expect(requests.filter((r) => r.includes('series_name'))).toHaveLength(2);
+    expect(requests.length).toBeLessThanOrEqual(5);
+  });
+
+  test('a second-page issue with the same title is a candidate too', async () => {
+    const { client } = standInMetron((url) => {
+      if (url.searchParams.has('series_name')) {
+        return url.searchParams.get('page') === '2' ? pageOf([thing(3, 1999, '07')], 3) : pageOf([thing(1, 1983, '07'), other(9)], 3);
+      }
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic({ series_title: 'The Thing', issue_number: '1', cover_month: 7 }, client);
+    if (result.verdict === 'lookup_failed') throw new Error('unexpected lookup failure');
+    expect(result.candidates.map((c) => c.metronId).sort()).toEqual([1, 3]);
+  });
+
+  test('does not fetch a second page that could not complete the search', async () => {
+    const { client, requests } = standInMetron((url) => {
+      if (url.searchParams.has('series_name')) return pageOf([thing(1, 1983, '07'), thing(2, 2025, '07')], 50);
+      return new Response('', { status: 404 });
+    });
+    const result = await identifyComic({ series_title: 'The Thing', issue_number: '1', cover_month: 7 }, client);
+    if (result.verdict === 'lookup_failed') throw new Error('unexpected lookup failure');
+    expect(result.verdict).toBe('ambiguous');
+    expect(result.choices).toBeUndefined();
+    expect(requests.filter((r) => r.includes('page=2'))).toEqual([]);
+  });
+});
+
 describe('trade series names', () => {
   test.each([
     ['Batman TPB (2022)', 'Batman'],
