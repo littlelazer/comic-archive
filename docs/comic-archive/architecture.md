@@ -35,7 +35,7 @@ The template is stamped into a group with `ncl groups create --template comic-ca
 | No per-group tool restriction; all agents run `bypassPermissions` with Bash | Agent instructions cannot be the write-authorization boundary | Enforce in MCP tool code and gateway grants (Phase 4) |
 | Gateway holds non-model requests for approval by default | Metron/Airtable calls would each prompt | Metron: no prompt on a granted secret (verified). Recheck for Airtable writes |
 | Metron credential via OneCLI | Resolved | API token as a generic secret (`metron`, host `metron.cloud`, path `/api/*`, `Authorization: Bearer {value}`), granted to ComicCatalog only. Verified with `onecli run --agent <ComicCatalog identifier> -- curl …` |
-| Slack Interactivity is off in Socket Mode (upstream `/add-slack` Socket Mode steps never enable it; `src/provisioning/slack-app.ts` sets `interactivity.is_enabled: false`) | `ask_user_question` taps never reach NanoClaw | littlelazer turns on Interactivity & Shortcuts in the Slack app (no Request URL needed in Socket Mode); consider an upstream issue |
+| Upstream `/add-slack` Socket Mode steps never mention Interactivity, and `src/provisioning/slack-app.ts` sets `interactivity.is_enabled: false` | A Socket Mode app set up from those steps alone could not receive button taps | Not an issue here: littlelazer confirmed Interactivity is on in the comic-archive Slack app (2026-11-23). Consider an upstream issue |
 | Pre-2000s UPCs identify the series, not the issue (issue is in the add-on digits) | `upc_starts_with` returns many issues, and Metron lacks UPCs for some | Use UPC to narrow the series, then `series_name` + `number` (+ `cover_year`); never accept a UPC hit alone |
 
 ## Metron lookup
