@@ -79,7 +79,9 @@ Conventions: every code file starts with two `// ABOUTME:` lines. Server tests u
 - Remotes: `origin`/`github` = `github.com/littlelazer/comic-archive` (`origin` also pushes to the Dropbox mirror); `dropbox` = local Dropbox bare mirror; `upstream` = `nanocoai/nanoclaw` (`main`, `channels`).
 - Commits are conventional, with scopes `comic-catalog` (code/template) and `comic-archive` (docs).
 - Husky pre-commit runs `pnpm run format:fix` and re-stages `src/**/*.ts`. Never bypass hooks.
-- Upstream updates go through `/update-nanoclaw`. After a local commit, build and test, then re-stamp the upgrade state before restarting the host.
+- Upstream updates go through `/update-nanoclaw` (stable channel, merge strategy). This install pulls its agent image from the hardened-image registry (`NANOCLAW_HARDENED_IMAGE=true`), so cutover runs `container/build.sh pull`.
+- **Every commit merged into `main` trips the upgrade tripwire, docs-only commits included.** Right after merging: `pnpm run build`, `pnpm test`, `pnpm exec tsx scripts/upgrade-state.ts set`, `bash setup/lib/restart.sh`. Otherwise the next restart crash-loops (see `docs/upgrade-recovery.md`).
+- **`~/.local/bin` must be on `PATH`** for the registry credential helper (`docker-credential-nanoclaw`) and `onecli`, both installed there. `~/.zshrc` adds it, but non-interactive shells (Claude Code's Bash tool included) don't load that file, so run `export PATH="$HOME/.local/bin:$PATH"` before an update cutover, an image pull, or `onecli`. Without it, the pull fails with `docker-credential-nanoclaw: executable file not found in $PATH`.
 
 ## Debugging a Slack run
 
