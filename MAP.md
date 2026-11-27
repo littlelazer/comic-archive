@@ -67,7 +67,9 @@ Slack photo → `@chat-adapter/slack` (Socket Mode) → host saves the file to `
 | Typecheck / format | `pnpm exec tsc --noEmit`, `pnpm run format:check` | as CI runs them |
 | End-to-end | Slack checklists in `docs/comic-archive/` | littlelazer posts; Claude checks `outbound.db`, `logs/nanoclaw.log`, the session transcript |
 
-There is no single canonical `check` script. CI (`.github/workflows/ci.yml`) runs format, both tsc configs, sharded vitest, and `bun run test` in `container/agent-runner`. CI does **not** run the comic-catalog Bun tests, so run them yourself.
+There is no single canonical `check` script. CI (`.github/workflows/ci.yml`, upstream's) runs format, both tsc configs, sharded vitest, and `bun run test` in `container/agent-runner`. `.github/workflows/comic-catalog.yml` (ours, kept separate so upstream `ci.yml` changes merge cleanly) runs the comic-catalog Bun tests; live tests skip there because there's no gateway. `scripts/comic-catalog-workflow.test.ts` pins that workflow.
+
+`README.md` opens with a comic-archive section above upstream's README. Keep our text in that top section only.
 
 Conventions: every code file starts with two `// ABOUTME:` lines. Server tests use `bun:test`, not vitest. Prefer real Metron data in live tests over mocks.
 

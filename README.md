@@ -1,3 +1,22 @@
+# comic-archive
+
+Catalog a comic-book collection by posting cover photos in Slack.
+
+Post a photo of a comic's cover in the `#comic-archive` Slack channel. The **ComicCatalog** agent reads the cover, looks it up in the [Metron](https://metron.cloud) comic database, and works out the exact issue and, where it can, the variant, printing and edition (direct or newsstand). When it can't decide, it asks you with Slack buttons. Then it replies in the thread with the match and how it was settled. Saving confirmed comics to Airtable is the next planned phase.
+
+This repository is a [NanoClaw](https://github.com/nanocoai/nanoclaw) install. NanoClaw handles Slack, the agent containers and credentials; the comic-specific part is one agent template with a small MCP server, built on NanoClaw's extension points without patching its core.
+
+- **Uses:** NanoClaw v2 (Node host, Bun agent containers, Docker), Slack (Socket Mode), Claude, the Metron API, and the OneCLI credential gateway.
+- **Comic code:** [`templates/comic-catalog/`](templates/comic-catalog/), where `server/` is the MCP server with the `identify_comic`, `confirm_choice` and `get_comic` tools.
+- **Get it running:** [`docs/comic-archive/local-setup.md`](docs/comic-archive/local-setup.md) covers installing NanoClaw, adding Slack, creating the ComicCatalog agent, and running the tests.
+- **How it works:** [`docs/comic-archive/architecture.md`](docs/comic-archive/architecture.md). The project plan and phases are in [`PLAN.md`](PLAN.md). The guide for agents working in this repo is [`MAP.md`](MAP.md).
+
+Credentials stay in the gateway and `.env` (gitignored), never in Git.
+
+The rest of this file is NanoClaw's own README, kept as is so upstream updates merge cleanly.
+
+---
+
 <p align="center">
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
