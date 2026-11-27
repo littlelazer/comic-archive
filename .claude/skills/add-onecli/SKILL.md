@@ -50,6 +50,8 @@ This integration supports exactly the gateway version pinned in `.claude/skills/
 pnpm exec tsx .claude/skills/add-onecli/scripts/setup.ts
 ```
 
+Setup gives OneCLI's database its own random password in `~/.onecli/.env`. A local gateway still on the compose default gets one in place: its data stays, and OneCLI restarts once. To do only that on an existing install, run `pnpm exec tsx .claude/skills/add-onecli/scripts/postgres-password.ts`.
+
 ## Provider credentials
 
 Provider skills such as `/add-opencode` store model credentials here through the
@@ -135,6 +137,16 @@ The setup consumer writes `NANOCLAW_GATEWAY_PROVIDER=onecli` only after every di
 
 During an atomic NanoClaw upgrade, `scripts/detect.ts` identifies an older implicit OneCLI installation so the generic updater can preserve that choice before the service restarts.
 
+## Check the database password
+
+Setup moves a local OneCLI database off the compose default password, but it leaves the database alone, and still succeeds, when restarting OneCLI would change anything else. This check reads whether a running local database still accepts the default password. It changes nothing and never fails the install.
+
+```nc:run effect:fetch capture:db_warn=.warn,db_hint=.hint
+pnpm exec tsx .claude/skills/add-onecli/scripts/postgres-check.ts || echo '{"warn":"no","hint":"none"}'
+```
+
+When it does, any agent container can log in to OneCLI's database. The note for the user comes after the proxy check below, so that neither note holds the install for a confirmation.
+
 ## Check the proxy address
 
 A gateway on another host must hand agents its own address in `GATEWAY_BASE_URL`. OneCLI 1.45 defaults it to `host.docker.internal:10255`, the agent's own machine, so with a remote gateway every model call hangs with no reply. When setup was pointed at a remote gateway (`NANOCLAW_ONECLI_API_HOST`), this check reads the proxy address the gateway hands agents. It never fails the install.
@@ -147,4 +159,10 @@ When that address is `host.docker.internal`, a loopback address or a wildcard ad
 
 ```nc:operator when:proxy_warn=yes
 {{proxy_hint}}
+```
+
+When the database check found the default password, or could not read a running database, show the user what to run:
+
+```nc:operator when:db_warn=yes
+{{db_hint}}
 ```
